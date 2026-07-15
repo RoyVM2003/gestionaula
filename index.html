@@ -1,0 +1,1727 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Gestor de Aula Clay</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      :root {
+        --bg: #f8efe8;
+        --card: rgba(255, 252, 248, 0.86);
+        --ink: #433b4f;
+        --muted: #7b728b;
+        --accent: #8b6cf6;
+        --accent-2: #ff9b8a;
+      }
+
+      body {
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        color: var(--ink);
+        background:
+          radial-gradient(circle at top left, rgba(255, 185, 180, 0.3), transparent 24%),
+          radial-gradient(circle at bottom right, rgba(139, 108, 246, 0.2), transparent 32%),
+          var(--bg);
+      }
+
+      .clay-card {
+        background: var(--card);
+        border: 1px solid rgba(255, 255, 255, 0.9);
+        box-shadow: 10px 10px 26px rgba(183, 163, 159, 0.24), -10px -10px 24px rgba(255, 255, 255, 0.82), inset 1px 1px 2px rgba(255, 255, 255, 0.7), inset -1px -1px 3px rgba(141, 126, 126, 0.16);
+        backdrop-filter: blur(18px);
+      }
+
+      .clay-button {
+        background: linear-gradient(135deg, rgba(255,255,255,0.95), rgba(247, 236, 255, 0.9));
+        box-shadow: 8px 8px 18px rgba(167, 147, 146, 0.18), -6px -6px 16px rgba(255,255,255,0.88);
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+      }
+
+      .clay-button:hover {
+        transform: translateY(-1px);
+      }
+
+      .clay-button:active {
+        transform: translateY(1px);
+        box-shadow: inset 2px 2px 5px rgba(142, 121, 120, 0.2), inset -2px -2px 5px rgba(255,255,255,0.9);
+      }
+
+      .input-clay {
+        background: rgba(255, 255, 255, 0.72);
+        border: 1px solid rgba(255, 255, 255, 0.8);
+        box-shadow: inset 2px 2px 6px rgba(169, 151, 151, 0.16), inset -2px -2px 6px rgba(255,255,255,0.8);
+      }
+
+      .nav-pill.active {
+        background: linear-gradient(135deg, rgba(139,108,246,0.2), rgba(255,155,138,0.16));
+        box-shadow: inset 1px 1px 3px rgba(255,255,255,0.8), inset -1px -1px 3px rgba(120,102,132,0.14);
+      }
+
+      .chip {
+        background: rgba(255,255,255,0.65);
+        border: 1px solid rgba(255,255,255,0.78);
+        box-shadow: inset 1px 1px 3px rgba(255,255,255,0.85), inset -1px -1px 3px rgba(154,144,148,0.18);
+      }
+
+      .sticky-col {
+        position: sticky;
+        left: 0;
+        z-index: 20;
+        background: rgba(255,255,255,0.95);
+      }
+
+      .sticky-col-right {
+        position: sticky;
+        right: 0;
+        z-index: 20;
+        background: rgba(255,255,255,0.95);
+      }
+
+      .attendance-scroll {
+        overflow-x: scroll;
+        overflow-y: hidden;
+        scrollbar-width: thin;
+        scrollbar-color: rgba(139,108,246,0.65) rgba(241,245,249,0.95);
+        scrollbar-gutter: stable;
+      }
+      .attendance-scroll::-webkit-scrollbar {
+        height: 10px;
+      }
+      .attendance-scroll::-webkit-scrollbar-track {
+        background: rgba(241,245,249,0.9);
+        border-radius: 999px;
+      }
+      .attendance-scroll::-webkit-scrollbar-thumb {
+        background: rgba(139,108,246,0.6);
+        border-radius: 999px;
+      }
+      .attendance-scroll::-webkit-scrollbar-thumb:hover {
+        background: rgba(139,108,246,0.85);
+      }
+
+      @media print {
+        body {
+          background: white;
+        }
+        .no-print {
+          display: none !important;
+        }
+        .print-card {
+          box-shadow: none !important;
+          border: 1px solid #ddd;
+        }
+      }
+    </style>
+  </head>
+  <body class="min-h-screen">
+    <div id="loginScreen" class="min-h-screen flex items-center justify-center p-4">
+      <div class="clay-card rounded-[36px] p-8 md:p-10 w-full max-w-md">
+        <div class="text-center mb-8">
+          <div class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-[24px] bg-gradient-to-br from-fuchsia-200 via-rose-100 to-amber-100 text-3xl shadow-inner">
+            ✦
+          </div>
+          <h1 class="text-2xl font-semibold">Gestor de Aula</h1>
+          <p class="mt-2 text-sm text-slate-600">Tu espacio para planear clases, asistencia y reportes desde tu laptop.</p>
+        </div>
+        <form id="loginForm" class="space-y-4">
+          <label class="block">
+            <span class="mb-1 block text-sm font-medium">Usuario</span>
+            <input id="username" class="input-clay w-full rounded-2xl px-4 py-3 outline-none" placeholder="Usuario" required />
+          </label>
+          <label class="block">
+            <span class="mb-1 block text-sm font-medium">Contraseña</span>
+            <input id="password" type="password" class="input-clay w-full rounded-2xl px-4 py-3 outline-none" placeholder="Contraseña" required />
+          </label>
+          <button type="submit" class="clay-button w-full rounded-2xl px-4 py-3 font-semibold">Entrar al panel</button>
+        </form>
+        <p class="mt-4 text-center text-xs text-slate-500">Acceso local para el docente.</p>
+      </div>
+    </div>
+
+    <div id="mainApp" class="hidden min-h-screen px-3 py-4 md:px-6 lg:px-8">
+      <div class="mx-auto max-w-7xl">
+        <header class="clay-card no-print mb-6 rounded-[32px] p-4 md:p-5">
+          <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <p class="text-sm font-semibold uppercase tracking-[0.3em] text-slate-500">Panel docente</p>
+              <h2 class="text-2xl font-semibold">Bienvenido, <span id="headerName">Docente</span></h2>
+            </div>
+            <div class="flex flex-wrap items-center gap-2">
+              <button id="logoutBtn" class="clay-button rounded-2xl px-4 py-2 font-medium">Cerrar sesión</button>
+            </div>
+          </div>
+        </header>
+
+        <div class="grid gap-6 lg:grid-cols-[260px_minmax(0,1fr)]">
+          <aside class="clay-card no-print rounded-[30px] p-4 md:p-5">
+            <div class="mb-5 text-center">
+              <div class="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-[22px] bg-gradient-to-br from-violet-200 via-pink-100 to-orange-100 text-2xl">📚</div>
+              <h3 class="text-lg font-semibold">Navegación</h3>
+            </div>
+            <nav class="space-y-2">
+              <button class="nav-pill active w-full rounded-2xl px-4 py-3 text-left text-sm font-medium" data-view="materias">Materias</button>
+              <button class="nav-pill w-full rounded-2xl px-4 py-3 text-left text-sm font-medium" data-view="alumnos">Lista de Alumnos</button>
+              <button class="nav-pill w-full rounded-2xl px-4 py-3 text-left text-sm font-medium" data-view="reportes">Generar Reportes</button>
+              <button class="nav-pill w-full rounded-2xl px-4 py-3 text-left text-sm font-medium" data-view="perfil">Mi Perfil</button>
+            </nav>
+          </aside>
+
+          <main id="contentArea" class="space-y-6"></main>
+        </div>
+      </div>
+    </div>
+
+    <div id="toast" class="pointer-events-none fixed bottom-4 right-4 z-50 hidden rounded-2xl px-4 py-3 text-sm font-medium text-slate-700 shadow-xl"></div>
+
+    <script>
+      const STORAGE_KEY = 'clayTeacherAppData';
+      const defaultData = {
+        auth: { username: '', password: '' },
+        profile: { nombre: '', institucion: '', ciclo: '', correo: '' },
+        subjects: [],
+        students: [],
+        studentLists: []
+      };
+
+      const defaultActivityCategories = [
+        { id: 'tarea', name: 'Tarea', weight: 1, color: '#f97316' },
+        { id: 'proyecto', name: 'Proyecto', weight: 2, color: '#2563eb' },
+        { id: 'examen', name: 'Examen', weight: 3, color: '#dc2626' },
+        { id: 'ejercicio', name: 'Ejercicio', weight: 1, color: '#16a34a' },
+        { id: 'otros', name: 'Otros', weight: 1, color: '#8b5cf6' }
+      ];
+
+      let appData = loadData();
+      // Añade esto donde declaras tus variables globales al inicio de la etiqueta <script>
+      let attendanceBackups = {}; // Guardará el estado anterior por cada fecha
+      let currentView = 'materias';
+      let activeSubjectId = null;
+      let activeSubjectTab = 'asistencia';
+      let editingSubjectId = null;
+      let editingStudentId = null;
+      let editingStudentListId = null;
+      let editingActivityId = null;
+      let viewingStudentListId = null;
+      let draftListName = '';
+      let draftListEntries = [];
+      let draftListText = '';
+      // Always require login on each page open
+      let isLoggedIn = false;
+
+      const loginScreen = document.getElementById('loginScreen');
+      const mainApp = document.getElementById('mainApp');
+      const contentArea = document.getElementById('contentArea');
+      const loginForm = document.getElementById('loginForm');
+      const logoutBtn = document.getElementById('logoutBtn');
+      const headerName = document.getElementById('headerName');
+      const toast = document.getElementById('toast');
+
+      init();
+
+      function init() {
+        bindGlobalEvents();
+        render();
+        if (isLoggedIn) {
+          showApp();
+        }
+      }
+
+      function bindGlobalEvents() {
+        // Login handler with error trapping and fallback button click
+        const doLogin = (ev) => {
+          try {
+            if (ev && ev.preventDefault) ev.preventDefault();
+            const usernameEl = document.getElementById('username');
+            const passwordEl = document.getElementById('password');
+            if (!usernameEl || !passwordEl) {
+              showToast('Error: campos de login no encontrados');
+              console.error('Login fields missing', { usernameEl, passwordEl });
+              return;
+            }
+            const username = usernameEl.value.trim();
+            const password = passwordEl.value.trim();
+            if (isValidCredentials(username, password)) {
+              appData.auth = { username, password };
+              saveData();
+              isLoggedIn = true; // do not persist session to force login next open
+              showApp();
+              showToast('Acceso correcto');
+            } else {
+              showToast('Ingresa usuario y contraseña');
+            }
+          } catch (err) {
+            console.error('Login error', err);
+            showToast('Error al iniciar sesión');
+          }
+        };
+
+        if (loginForm) loginForm.addEventListener('submit', doLogin);
+        const loginButton = loginForm?.querySelector('button[type="submit"]');
+        if (loginButton) loginButton.addEventListener('click', doLogin);
+
+        logoutBtn.addEventListener('click', () => {
+          isLoggedIn = false;
+          hideApp();
+          showToast('Sesión cerrada');
+        });
+
+        document.querySelectorAll('[data-view]').forEach((button) => {
+          button.addEventListener('click', () => {
+            currentView = button.getAttribute('data-view');
+            document.querySelectorAll('[data-view]').forEach((item) => item.classList.remove('active'));
+            button.classList.add('active');
+            render();
+          });
+        });
+
+        contentArea.addEventListener('click', handleContentClick);
+        contentArea.addEventListener('submit', handleContentSubmit);
+        contentArea.addEventListener('input', handleContentInput);
+        contentArea.addEventListener('change', handleContentChange);
+      }
+
+      function handleContentClick(event) {
+        const button = event.target.closest('button');
+
+        if (!button) return;
+
+        const action = button.getAttribute('data-action');
+        const id = button.getAttribute('data-id');
+
+        if (action === 'select-subject') {
+          activeSubjectId = id;
+          activeSubjectTab = 'asistencia';
+          render();
+        }
+
+        if (action === 'back-to-subjects') {
+          activeSubjectId = null;
+          render();
+        }
+
+        if (action === 'edit-subject') {
+          editingSubjectId = id;
+          render();
+        }
+
+        if (action === 'delete-subject') {
+          if (!window.confirm('¿Estás seguro de eliminar esta materia?')) return;
+          appData.subjects = appData.subjects.filter((item) => item.id !== id);
+          if (activeSubjectId === id) activeSubjectId = null;
+          saveData();
+          render();
+          showToast('Materia eliminada');
+        }
+
+        if (action === 'switch-subject-tab') {
+          activeSubjectTab = button.getAttribute('data-tab');
+          render();
+        }
+
+        if (action === 'toggle-attendance') {
+          const subject = appData.subjects.find((item) => item.id === activeSubjectId);
+          if (!subject) return;
+          const studentId = button.getAttribute('data-student-id');
+          const today = getTodayKey();
+          if (!subject.attendanceByDate) subject.attendanceByDate = {};
+          if (!subject.attendanceByDate[today]) subject.attendanceByDate[today] = {};
+          const current = subject.attendanceByDate[today][studentId] || 'presente';
+          const next = current === 'presente' ? 'falta' : current === 'falta' ? 'retardo' : 'presente';
+          subject.attendanceByDate[today][studentId] = next;
+          saveData();
+          render();
+        }
+        // 1. APLICAR ASISTENCIA GENERAL (Y respaldar el estado anterior)
+        if (action === 'bulk-attendance-present') {
+          const subject = appData.subjects.find((item) => item.id === activeSubjectId);
+          if (!subject) return;
+          const date = button.getAttribute('data-date');
+          if (!date) return;
+          
+          const students = getSubjectStudents(subject);
+          if (students.length === 0) return;
+
+          if (!subject.attendanceByDate) subject.attendanceByDate = {};
+          if (!subject.attendanceByDate[date]) subject.attendanceByDate[date] = {};
+
+          // RESPALDO: Guardamos una copia exacta del estado de asistencia de este día antes de alterarlo
+          const backupKey = `${subject.id}_${date}`;
+          attendanceBackups[backupKey] = { ...subject.attendanceByDate[date] };
+
+          // Marcamos presente (🟢) a todos
+          students.forEach((student) => {
+            subject.attendanceByDate[date][student.id] = 'presente';
+          });
+
+          saveData();
+
+          // Cambiamos visualmente todos los botones de la columna a 🟢 al instante
+          const individualButtons = contentArea.querySelectorAll(`[data-action="toggle-cell"][data-date="${date}"]`);
+          individualButtons.forEach((btn) => {
+            btn.textContent = '🟢';
+          });
+
+          // Actualizamos el botón de la cabecera para que ahora diga "Deshacer"
+          button.outerHTML = `
+            <button type="button" 
+                    class="mt-1 bg-slate-100 hover:bg-slate-200 text-slate-600 text-[10px] font-medium px-1.5 py-0.5 rounded-md border border-slate-300 transition-colors flex items-center gap-1"
+                    data-action="undo-bulk-attendance" 
+                    data-date="${date}" 
+                    title="Restaurar estados anteriores">
+              ↩️ Deshacer
+            </button>
+          `;
+
+          // Recalculamos porcentajes en el DOM al instante
+          updateUiPercentagesInRealTime(subject, students);
+          showToast(`Asistencia general aplicada. Puedes "Deshacer" si te equivocaste.`);
+        }
+
+        // 2. DESHACER ASISTENCIA GENERAL (Y restaurar el estado anterior)
+        if (action === 'undo-bulk-attendance') {
+          const subject = appData.subjects.find((item) => item.id === activeSubjectId);
+          if (!subject) return;
+          const date = button.getAttribute('data-date');
+          if (!date) return;
+
+          const students = getSubjectStudents(subject);
+          const backupKey = `${subject.id}_${date}`;
+
+          // Si existe un respaldo guardado, lo restauramos
+          if (attendanceBackups[backupKey]) {
+            subject.attendanceByDate[date] = { ...attendanceBackups[backupKey] };
+            // Limpiamos el respaldo de la memoria una vez usado
+            delete attendanceBackups[backupKey];
+          } else {
+            // Si por alguna razón no había respaldo, simplemente limpiamos el día
+            subject.attendanceByDate[date] = {};
+          }
+
+          saveData();
+
+          // Restauramos visualmente los emojis de cada celda en la columna al instante
+          const individualButtons = contentArea.querySelectorAll(`[data-action="toggle-cell"][data-date="${date}"]`);
+          individualButtons.forEach((btn) => {
+            const studentId = btn.getAttribute('data-student-id');
+            const state = subject.attendanceByDate[date][studentId] || '';
+            const label = state === 'presente' ? '🟢' : state === 'falta' ? '🔴' : state === 'retardo' ? '🟡' : '◻️';
+            btn.textContent = label;
+          });
+
+          // Regresamos el botón de la cabecera a su estado original "Todos"
+          button.outerHTML = `
+            <button type="button" 
+                    class="mt-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 text-[10px] font-medium px-1.5 py-0.5 rounded-md border border-emerald-200/60 transition-colors flex items-center gap-1"
+                    data-action="bulk-attendance-present" 
+                    data-date="${date}" 
+                    title="Marcar asistencia general para este día">
+              👥 Todos 🟢
+            </button>
+          `;
+
+          // Recalculamos porcentajes en el DOM al instante
+          updateUiPercentagesInRealTime(subject, students);
+          showToast(`Se restauraron las asistencias anteriores.`);
+        }
+        if (action === 'toggle-cell') {
+          const subject = appData.subjects.find((item) => item.id === activeSubjectId);
+          if (!subject) return;
+          const date = button.getAttribute('data-date');
+          const studentId = button.getAttribute('data-student-id');
+          if (!date || !studentId) return;
+          if (!subject.attendanceByDate) subject.attendanceByDate = {};
+          if (!subject.attendanceByDate[date]) subject.attendanceByDate[date] = {};
+          
+          const current = subject.attendanceByDate[date][studentId] || '';
+          const next = current === '' ? 'presente' : current === 'presente' ? 'falta' : current === 'falta' ? 'retardo' : '';
+          
+          if (next === '') {
+            delete subject.attendanceByDate[date][studentId];
+          } else {
+            subject.attendanceByDate[date][studentId] = next;
+          }
+          
+          // Guardamos los datos localmente
+          saveData();
+          
+          // 1. UPDATE OPTIMISTA: Cambiamos solo el texto del botón en el DOM
+          const label = next === 'presente' ? '🟢' : next === 'falta' ? '🔴' : next === 'retardo' ? '🟡' : '◻️';
+          button.textContent = label;
+          
+          // 2. ACTUALIZACIÓN EN TIEMPO REAL DEL PORCENTAJE (sin renderizar todo)
+          // Buscamos la fila (tr) donde se hizo clic
+          const row = button.closest('tr');
+          if (row) {
+            // Obtenemos todas las fechas configuradas para el ciclo actual
+            const storedStartDate = subject.attendanceStartDate || addDays(getTodayKey(), -30);
+            const storedEndDate = subject.attendanceEndDate || getTodayKey();
+            const attendanceDates = getWeekdaysInRange(storedStartDate, storedEndDate);
+            const totalDiasPosibles = attendanceDates.length;
+
+            if (totalDiasPosibles > 0) {
+              let diasAsistidos = 0;
+              
+              // Recorremos las celdas de esta fila para contar los "presente" reales en los datos actualizados
+              attendanceDates.forEach(d => {
+                if (subject.attendanceByDate[d]?.[studentId] === 'presente') {
+                  diasAsistidos++;
+                }
+              });
+
+              const attendancePercent = Math.round((diasAsistidos / totalDiasPosibles) * 100);
+
+              // Buscamos la celda del porcentaje al final de la fila (sticky-col-right)
+              const percentCell = row.querySelector('.sticky-col-right');
+              if (percentCell) {
+                percentCell.innerHTML = `
+                  <div class="pct-container flex flex-col items-center justify-center bg-slate-50/50 rounded-lg p-1 border border-slate-100" data-student-id="${studentId}">
+                    <div class="text-slate-400 font-normal text-[10px] mb-0.5">${diasAsistidos}/${totalDiasPosibles} d</div>
+                    <div class="text-slate-700 text-sm font-semibold">${attendancePercent}%</div>
+                  </div>
+                `;
+              }
+            }
+          }
+        }
+
+        if (action === 'save-attendance') {
+          const subject = appData.subjects.find((item) => item.id === activeSubjectId);
+          if (!subject) return;
+          saveData();
+          showToast('Asistencia guardada');
+          render();
+        }
+
+        if (action === 'edit-student') {
+          editingStudentId = id;
+          render();
+        }
+
+        if (action === 'add-list-row') {
+          draftListEntries.push('');
+          render();
+        }
+
+        if (action === 'remove-list-row') {
+          const index = Number(button.getAttribute('data-index'));
+          draftListEntries.splice(index, 1);
+          render();
+        }
+
+        if (action === 'clear-list-builder') {
+          draftListName = '';
+          draftListEntries = [];
+          editingStudentListId = null;
+          render();
+        }
+
+        if (action === 'edit-student-list') {
+          const list = appData.studentLists.find((item) => item.id === id);
+          editingStudentListId = id;
+          viewingStudentListId = null;
+          draftListName = list?.name || '';
+          draftListEntries = (list?.studentIds || []).map((studentId) => {
+            const student = appData.students.find((item) => item.id === studentId);
+            return student?.name || '';
+          }).filter(Boolean);
+          render();
+        }
+
+        if (action === 'view-student-list') {
+          viewingStudentListId = id === viewingStudentListId ? null : id;
+          render();
+        }
+
+        if (action === 'delete-student-list') {
+          if (!window.confirm('¿Estás seguro de eliminar esta lista?')) return;
+          appData.studentLists = appData.studentLists.filter((item) => item.id !== id);
+          appData.subjects.forEach((subject) => {
+            subject.studentListIds = (subject.studentListIds || []).filter((listId) => listId !== id);
+          });
+          saveData();
+          render();
+          showToast('Lista eliminada');
+        }
+
+        if (action === 'delete-student') {
+          if (!window.confirm('¿Estás seguro de eliminar este alumno?')) return;
+          appData.students = appData.students.filter((item) => item.id !== id);
+          appData.subjects.forEach((subject) => {
+            subject.students = (subject.students || []).filter((studentId) => studentId !== id);
+          });
+          saveData();
+          render();
+          showToast('Alumno eliminado');
+        }
+
+        if (action === 'assign-list-to-subject') {
+          const listId = button.getAttribute('data-id');
+          const container = button.closest('.list-card');
+          const select = container?.querySelector('select');
+          const subjectId = select?.value;
+          const list = appData.studentLists.find((item) => item.id === listId);
+          const subject = appData.subjects.find((item) => item.id === subjectId);
+          if (!list || !subject) {
+            showToast('Selecciona una materia');
+            return;
+          }
+          list.subjectIds = Array.from(new Set([...(list.subjectIds || []), subject.id]));
+          subject.studentListIds = Array.from(new Set([...(subject.studentListIds || []), list.id]));
+          syncSubjectStudentsFromLists(subject);
+          saveData();
+          render();
+          showToast(`Lista asignada a ${subject.name}`);
+        }
+
+        if (action === 'select-subject-list') {
+          const subject = appData.subjects.find((item) => item.id === activeSubjectId);
+          const list = appData.studentLists.find((item) => item.id === id);
+          if (!subject || !list) {
+            showToast('Lista no encontrada');
+            return;
+          }
+          subject.activeListId = list.id;
+          subject.students = list.studentIds.slice();
+          saveData();
+          render();
+          showToast(`Lista ${list.name} activa`);
+        }
+
+        if (action === 'edit-activity' || action === 'delete-activity' || action === 'cancel-activity-edit') {
+          const subject = appData.subjects.find((item) => item.id === activeSubjectId);
+          if (!subject) return;
+          if (action === 'cancel-activity-edit') {
+            editingActivityId = null;
+            render();
+            return;
+          }
+          const activity = (subject.activities || []).find((item) => item.id === id);
+          if (!activity) return;
+          if (action === 'delete-activity') {
+            if (!window.confirm('¿Estás seguro de eliminar esta actividad?')) return;
+            subject.activities = (subject.activities || []).filter((item) => item.id !== id);
+            saveData();
+            render();
+            showToast('Actividad eliminada');
+            return;
+          }
+          editingActivityId = activity.id;
+          render();
+        }
+
+        if (action === 'clear-edit') {
+          editingSubjectId = null;
+          editingStudentId = null;
+          editingStudentListId = null;
+          draftListName = '';
+          draftListEntries = [];
+          render();
+        }
+
+        if (action === 'export-csv') {
+          exportNotesCsv();
+        }
+
+        if (action === 'print-risk-report') {
+          window.print();
+        }
+        if (action === 'remove-subject-from-list') {
+          const listId = button.getAttribute('data-list-id');
+          const subjectId = button.getAttribute('data-subject-id');
+          
+          const list = appData.studentLists.find((item) => item.id === listId);
+          const subject = appData.subjects.find((item) => item.id === subjectId);
+          
+          if (list && subject) {
+            if (!window.confirm(`¿Estás seguro de quitar la materia "${subject.name}" de la lista "${list.name}"?`)) return;
+            
+            // 1. Quitar la materia de la lista
+            list.subjectIds = (list.subjectIds || []).filter(id => id !== subjectId);
+            
+            // 2. Quitar la lista de la materia
+            subject.studentListIds = (subject.studentListIds || []).filter(id => id !== listId);
+            
+            // Si la lista quitada era la activa en la materia, la reseteamos
+            if (subject.activeListId === listId) {
+              subject.activeListId = null;
+            }
+            
+            // 3. Sincronizar alumnos de la materia (recalcula los alumnos basándose en las listas restantes)
+            syncSubjectStudentsFromLists(subject);
+            
+            // Guardar y renderizar de nuevo
+            saveData();
+            render();
+            showToast(`Materia quitada de la lista`);
+          }
+        }
+      }
+
+      function handleContentInput(event) {
+        const target = event.target;
+        if (target.id === 'listNameInput') {
+          draftListName = target.value;
+          return;
+        }
+
+        if (target.id === 'listTextarea') {
+          draftListEntries = String(target.value).split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
+          return;
+        }
+
+        if (target.classList.contains('draft-name-input')) {
+          const index = Number(target.getAttribute('data-draft-list-index'));
+          if (!Number.isNaN(index)) {
+            draftListEntries[index] = target.value;
+          }
+        }
+
+        // Handle attendance date range changes
+        if (target.getAttribute('data-action') === 'set-attendance-dates') {
+          const subject = appData.subjects.find((item) => item.id === activeSubjectId);
+          if (!subject) return;
+          const field = target.getAttribute('data-field');
+          const value = target.value;
+          if (field === 'startDate') {
+            subject.attendanceStartDate = value;
+          } else if (field === 'endDate') {
+
+            subject.attendanceEndDate = value;
+          }
+          saveData();
+          render();
+        }
+      }
+
+      function handleContentChange(event) {
+        const target = event.target;
+        if (target.matches('input[type="file"][data-list-file]')) {
+          const file = target.files?.[0];
+          if (!file) return;
+          readTextFromFile(file).then((text) => {
+            const names = splitNames(text);
+            if (names.length) {
+              // Replace the textarea content with loaded names for review
+              draftListEntries = names;
+              draftListText = names.join('\n');
+              render();
+              showToast(`${names.length} nombres cargados`);
+            }
+          });
+        }
+      }
+
+      async function handleContentSubmit(event) {
+        event.preventDefault();
+        const form = event.target;
+
+        if (form.id === 'subjectForm') {
+          const name = document.getElementById('subjectName').value.trim();
+          const description = document.getElementById('subjectDescription').value.trim();
+          const color = document.getElementById('subjectColor')?.value || '#8b6cf6';
+          if (!name) {
+            showToast('Escribe el nombre de la materia');
+            return;
+          }
+          if (editingSubjectId) {
+            const subject = appData.subjects.find((item) => item.id === editingSubjectId);
+            if (subject) {
+              subject.name = name;
+              subject.description = description;
+              subject.color = color;
+            }
+            showToast('Materia actualizada');
+          } else {
+            appData.subjects.push({
+              id: createId(),
+              name,
+              description,
+              color,
+              students: [],
+              attendanceByDate: {},
+              evaluations: {},
+              activeListId: null,
+              activities: defaultActivityCategories.map((activity) => ({
+                id: createId(),
+                name: activity.name,
+                weight: activity.weight,
+                date: getTodayKey(),
+                color: activity.color
+              }))
+            });
+            showToast('Materia creada');
+          }
+          editingSubjectId = null;
+          form.reset();
+          saveData();
+          render();
+        }
+
+        if (form.id === 'studentForm') {
+          const name = document.getElementById('studentName').value.trim();
+          if (!name) {
+            showToast('Escribe el nombre del alumno');
+            return;
+          }
+          if (editingStudentId) {
+            const student = appData.students.find((item) => item.id === editingStudentId);
+            if (student) student.name = name;
+            showToast('Alumno actualizado');
+          } else {
+            appData.students.push({ id: createId(), name });
+            showToast('Alumno agregado');
+          }
+          editingStudentId = null;
+          form.reset();
+          saveData();
+          render();
+        }
+
+        if (form.id === 'studentListForm') {
+          const name = document.getElementById('listNameInput').value.trim();
+          const raw = document.getElementById('listTextarea').value || '';
+          const names = splitNames(raw);
+
+          if (!name) {
+            showToast('Escribe el nombre de la lista');
+            return;
+          }
+          if (!names.length) {
+            showToast('Agrega al menos un nombre');
+            return;
+          }
+
+          let list = null;
+          if (editingStudentListId) {
+            list = appData.studentLists.find((item) => item.id === editingStudentListId);
+            if (list) {
+              list.name = name;
+              list.studentIds = [];
+            }
+            showToast('Lista actualizada');
+          } else {
+            list = { id: createId(), name, studentIds: [], subjectIds: [] };
+            appData.studentLists.push(list);
+            showToast(`Lista creada con ${names.length} alumnos`);
+          }
+
+          names.forEach((studentName) => {
+            const normalized = studentName.toLowerCase();
+            const existingStudent = appData.students.find((student) => student.name.toLowerCase() === normalized);
+            if (existingStudent) {
+              if (!(list.studentIds || []).includes(existingStudent.id)) {
+                list.studentIds = [...(list.studentIds || []), existingStudent.id];
+              }
+            } else {
+              const newStudent = { id: createId(), name: studentName };
+              appData.students.push(newStudent);
+              list.studentIds = [...(list.studentIds || []), newStudent.id];
+            }
+          });
+
+          editingStudentListId = null;
+          draftListName = '';
+          draftListEntries = [];
+          draftListText = '';
+          saveData();
+          render();
+
+        }
+
+        if (form.id === 'bulkStudentForm') {
+          const raw = document.getElementById('bulkNames').value;
+          const names = splitNames(raw);
+          if (!names.length) {
+            showToast('Pega una lista o carga un archivo');
+            return;
+          }
+          names.forEach((name) => {
+            if (!appData.students.some((student) => student.name.toLowerCase() === name.toLowerCase())) {
+              appData.students.push({ id: createId(), name });
+            }
+          });
+          saveData();
+          document.getElementById('bulkStudentForm').reset();
+          render();
+          showToast(`${names.length} alumnos registrados`);
+        }
+
+        if (form.id === 'assignStudentsForm') {
+          const subjectId = document.getElementById('assignSubjectSelect').value;
+          const selected = Array.from(document.querySelectorAll('input[name="assignStudents"]:checked')).map((input) => input.value);
+          const subject = appData.subjects.find((item) => item.id === subjectId);
+          if (!subject) {
+            showToast('Selecciona una materia');
+            return;
+          }
+          subject.students = Array.from(new Set([...(subject.students || []), ...selected]));
+          saveData();
+          render();
+          showToast('Alumnos asignados');
+        }
+
+        if (form.id === 'activityQuickForm') {
+          const name = document.getElementById('quickActivityName').value.trim();
+          const weightInput = document.getElementById('quickActivityWeight').value.trim();
+          const color = document.getElementById('quickActivityColor')?.value || '#8b6cf6';
+          const date = document.getElementById('quickActivityDate')?.value || getTodayKey();
+          const subject = appData.subjects.find((item) => item.id === activeSubjectId);
+          if (!subject) return;
+          if (!name) {
+            showToast('Escribe un nombre de actividad');
+            return;
+          }
+          const weight = Number(weightInput) || 0;
+          if (!subject.activities) subject.activities = [];
+          const activity = { id: createId(), name, weight, color, date };
+          subject.activities.push(activity);
+          saveData();
+          document.getElementById('quickActivityName').value = '';
+          document.getElementById('quickActivityWeight').value = '';
+          render();
+          showToast('Actividad creada');
+        }
+
+        if (form.id === 'activityForm') {
+          const name = document.getElementById('activityName').value.trim();
+          const weightValue = Number(document.getElementById('activityWeight')?.value.trim());
+          const subject = appData.subjects.find((item) => item.id === activeSubjectId);
+          if (!subject) return;
+          if (!name) {
+            showToast('Escribe un nombre de actividad');
+            return;
+          }
+          if (!subject.activities) subject.activities = [];
+
+          if (editingActivityId) {
+            const activity = subject.activities.find((item) => item.id === editingActivityId);
+            if (activity) {
+              activity.name = name;
+              activity.weight = Number.isFinite(weightValue) && weightValue > 0 ? weightValue : activity.weight;
+            }
+            editingActivityId = null;
+            showToast('Actividad actualizada');
+          } else {
+            const category = defaultActivityCategories[0];
+            const activity = {
+              id: createId(),
+              name,
+              weight: Number.isFinite(weightValue) && weightValue > 0 ? weightValue : category.weight,
+              date: getTodayKey(),
+              color: category.color
+            };
+            subject.activities.push(activity);
+            showToast('Actividad creada');
+          }
+
+          saveData();
+          document.getElementById('activityName').value = '';
+          document.getElementById('activityWeight').value = '';
+          render();
+        }
+
+
+        if (form.id === 'profileForm') {
+          appData.profile = {
+            nombre: document.getElementById('profileName').value.trim(),
+            institucion: document.getElementById('profileInstitution').value.trim(),
+            ciclo: document.getElementById('profileCycle').value.trim(),
+            correo: document.getElementById('profileEmail').value.trim()
+          };
+          saveData();
+          render();
+          showToast('Perfil guardado');
+        }
+      }
+
+      function render() {
+        const profile = appData.profile || defaultData.profile;
+        const displayName = appData.auth?.username || profile.nombre || 'Docente';
+        headerName.textContent = displayName;
+        document.querySelectorAll('[data-view]').forEach((button) => {
+          button.classList.toggle('active', button.getAttribute('data-view') === currentView);
+        });
+
+        // Show login screen unless user logged in during this session
+        if (!isLoggedIn) {
+          loginScreen.classList.remove('hidden');
+          mainApp.classList.add('hidden');
+          return;
+        }
+
+        loginScreen.classList.add('hidden');
+        mainApp.classList.remove('hidden');
+
+        switch (currentView) {
+          case 'materias':
+            renderMateriasView();
+            break;
+          case 'alumnos':
+            renderAlumnosView();
+            break;
+          case 'reportes':
+            renderReportesView();
+            break;
+          case 'perfil':
+            renderPerfilView();
+            break;
+          default:
+            renderMateriasView();
+        }
+        scrollAttendanceToToday();
+      }
+
+      function renderMateriasView() {
+        const subjectList = appData.subjects || [];
+        const selectedSubject = subjectList.find((item) => item.id === activeSubjectId) || null;
+        const editingSubject = editingSubjectId ? subjectList.find((item) => item.id === editingSubjectId) : null;
+        const availableLists = [...(appData.studentLists || [])].sort((a, b) => a.name.localeCompare(b.name));
+        const selectedLists = selectedSubject ? availableLists.filter((list) => (selectedSubject.studentListIds || []).includes(list.id)) : [];
+        // If a subject is selected, show only the management panel full width
+        if (selectedSubject) {
+          contentArea.innerHTML = `
+            <section class="space-y-6">
+              <div class="clay-card rounded-[30px] p-5 md:p-6">
+                <div class="mb-4 flex items-center justify-between gap-3">
+                  <div>
+                    <h3 class="text-xl font-semibold">${escapeHtml(selectedSubject.name)}</h3>
+                  </div>
+                  <button class="clay-button rounded-2xl px-4 py-2 font-semibold" data-action="back-to-subjects">← Volver a materias</button>
+                </div>
+                <div class="mb-4">
+                  <div class="mb-4 flex gap-2">
+                    <button class="clay-button rounded-2xl px-3 py-2 text-sm ${activeSubjectTab === 'asistencia' ? 'nav-pill active' : ''}" data-action="switch-subject-tab" data-tab="asistencia">Asistencia</button>
+                    <button class="clay-button rounded-2xl px-3 py-2 text-sm ${activeSubjectTab === 'actividades' ? 'nav-pill active' : ''}" data-action="switch-subject-tab" data-tab="actividades">Actividades</button>
+                  </div>
+                  ${selectedLists.length ? `<div class="mb-4 flex flex-wrap gap-2">
+                    ${selectedLists.map((list) => `<button type="button" class="clay-button rounded-full px-3 py-2 text-sm ${list.id === selectedSubject.activeListId ? 'border border-slate-300 bg-slate-100' : ''}" data-action="select-subject-list" data-id="${list.id}">${escapeHtml(list.name)}${list.id === selectedSubject.activeListId ? ' · Activa' : ''}</button>`).join('')}
+                  </div>` : '<p class="text-sm text-slate-500 mb-4">No hay listas vinculadas a esta materia.</p>'}
+
+                  ${activeSubjectTab === 'asistencia' ? renderAttendanceTab(selectedSubject) : renderActivitiesTab(selectedSubject)}
+                </div>
+              </div>
+            </section>
+          `;
+          return;
+        }
+
+        // No subject selected: show subjects grid (3 per row) and the subject creation form
+        contentArea.innerHTML = `
+          <section class="space-y-6">
+            <div class="clay-card rounded-[30px] p-5 md:p-6">
+              <div class="mb-4 flex items-center justify-between gap-3">
+                <div>
+                  <p class="text-sm font-semibold uppercase tracking-[0.24em] text-slate-500">Materias</p>
+                  <h3 class="text-xl font-semibold">Gestiona tus asignaturas</h3>
+                </div>
+                <div class="chip rounded-full px-3 py-2 text-sm">${subjectList.length} registradas</div>
+              </div>
+              <form id="subjectForm" class="grid gap-3 md:grid-cols-[1fr_0.6fr_0.5fr]">
+                <input id="subjectName" class="input-clay w-full rounded-2xl px-4 py-3 outline-none" placeholder="Nombre de la materia" value="${escapeHtml(editingSubject?.name || '')}" required />
+                <input id="subjectDescription" class="input-clay w-full rounded-2xl px-4 py-3 outline-none" placeholder="Descripción breve" value="${escapeHtml(editingSubject?.description || '')}" />
+                <div class="flex gap-2">
+                  <input id="subjectColor" type="color" class="w-12 h-12 rounded-xl" value="${escapeHtml(editingSubject?.color || '#8b6cf6')}" title="Color de la materia" />
+                  <button type="submit" class="clay-button rounded-2xl px-4 py-3 font-semibold">${editingSubjectId ? 'Actualizar' : 'Agregar'}</button>
+                  <button type="button" class="clay-button rounded-2xl px-3 py-3" data-action="clear-edit">↺</button>
+                </div>
+              </form>
+            </div>
+
+            <div class="grid gap-4 md:grid-cols-3">
+              ${subjectList.length ? subjectList.map((subject) => `
+                <div class="clay-card rounded-[20px] p-4 md:p-5" style="background: linear-gradient(135deg, ${subject.color||'#8b6cf6'}33, ${subject.color||'#8b6cf6'}11); border: 1px solid ${subject.color||'#8b6cf6'}66;">
+                  <div class="mb-3 flex items-start justify-between gap-3">
+                    <div class="flex-1 min-w-0">
+                      <h4 class="text-lg font-semibold truncate">${escapeHtml(subject.name)}</h4>
+                      <p class="text-sm text-slate-700 truncate">${escapeHtml(subject.description || 'Sin descripción')}</p>
+                    </div>
+                    <div class="flex flex-col items-end gap-2 ml-3">
+                      <div class="flex gap-2">
+                        <button class="clay-button rounded-2xl px-3 py-2 text-sm" data-action="edit-subject" data-id="${subject.id}">Editar</button>
+                        <button class="clay-button rounded-2xl px-3 py-2 text-sm" data-action="delete-subject" data-id="${subject.id}">Eliminar</button>
+                      </div>
+                    </div>
+                  </div>
+                    <div class="mb-4 flex flex-wrap gap-2 text-sm">
+                      <span class="chip rounded-full px-3 py-2">${(subject.studentListIds || []).length} listas inscritas</span>
+                      <span class="chip rounded-full px-3 py-2">${(subject.activities || []).length} actividades</span>
+                    </div>
+                  <button class="clay-button w-full rounded-2xl px-4 py-3 font-semibold" data-action="select-subject" data-id="${subject.id}">Abrir gestión</button>
+                </div>
+              `).join('') : '<div class="clay-card rounded-[28px] p-5 text-sm text-slate-500">Aún no tienes materias. Crea la primera para comenzar.</div>'}
+            </div>
+          </section>
+        `;
+      }
+
+      function renderAttendanceTab(subject) {
+  const students = getSubjectStudents(subject);
+  const today = getTodayKey();
+
+  // Obtenemos el rango de fechas guardado o el rango por defecto de los últimos 30 días
+  const storedStartDate = subject.attendanceStartDate || addDays(today, -30);
+  const storedEndDate = subject.attendanceEndDate || today;
+
+  // Obtenemos solo los días de lunes a viernes en el rango de fechas
+  const attendanceDates = getWeekdaysInRange(storedStartDate, storedEndDate);
+
+  if (!students.length) {
+    return `<p class="text-sm text-slate-500">Sin alumnos asignados a esta materia aún.</p>`;
+  }
+
+  subject.attendanceByDate = subject.attendanceByDate || {};
+
+  const monthNames = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+  const dayNames = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+
+  // Generamos los encabezados de los días en la tabla con el botón de "Asistencia General"
+ const dayHeaders = attendanceDates.map((date) => {
+    const dateObj = new Date(date + 'T00:00:00');
+    const weekdayName = dayNames[dateObj.getDay()];
+    const monthName = monthNames[dateObj.getMonth()];
+    const isToday = date === today;
+
+    // Verificamos si existe un respaldo guardado para esta fecha y materia
+    const hasBackup = attendanceBackups[`${subject.id}_${date}`] ? true : false;
+
+    const buttonHtml = hasBackup 
+      ? `<button type="button" 
+                 class="mt-1 bg-slate-100 hover:bg-slate-200 text-slate-600 text-[10px] font-medium px-1.5 py-0.5 rounded-md border border-slate-300 transition-colors flex items-center gap-1"
+                 data-action="undo-bulk-attendance" 
+                 data-date="${date}" 
+                 title="Restaurar estados anteriores">
+           ↩️ Deshacer
+         </button>`
+      : `<button type="button" 
+                 class="mt-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 text-[10px] font-medium px-1.5 py-0.5 rounded-md border border-emerald-200/60 transition-colors flex items-center gap-1"
+                 data-action="bulk-attendance-present" 
+                 data-date="${date}" 
+                 title="Marcar asistencia general para este día">
+           👥 Todos 🟢
+         </button>`;
+
+    return `
+      <th class="px-2 py-2 text-center border border-slate-200" style="min-width:105px;" ${isToday ? 'data-current-day' : ''}>
+        <div class="flex flex-col items-center gap-0.5">
+          <span class="text-[9px] uppercase font-bold text-slate-400 tracking-wider">${monthName}</span>
+          <span class="text-xs uppercase text-slate-500">${weekdayName}</span>
+          <span class="font-semibold text-sm">${Number(date.split('-')[2])}</span>
+          ${buttonHtml}
+        </div>
+      </th>
+    `;
+  }).join('');
+
+  // Generamos las filas de cada alumno
+  const rows = students.map((student) => {
+    const cells = attendanceDates.map((date) => {
+      const state = (subject.attendanceByDate[date] || {})[student.id] || '';
+      const label = state === 'presente' ? '🟢' : state === 'falta' ? '🔴' : state === 'retardo' ? '🟡' : '◻️';
+      return `
+        <td class="px-1 py-1 text-center border border-slate-200" style="min-width:105px;">
+          <button class="clay-button rounded-md px-2 py-1" data-action="toggle-cell" data-date="${date}" data-student-id="${student.id}">${label}</button>
+        </td>
+      `;
+    }).join('');
+
+    // Cálculo matemático de los porcentajes de asistencia
+    const totalDiasPosibles = attendanceDates.length;
+    const diasAsistidos = attendanceDates.filter(date => (subject.attendanceByDate[date]?.[student.id] === 'presente')).length;
+    const attendancePercent = totalDiasPosibles > 0 ? Math.round((diasAsistidos / totalDiasPosibles) * 100) : 0;
+
+    return `
+      <tr>
+        <td class="px-2 py-2 font-medium border border-slate-200 sticky-col" style="width:160px; max-width:160px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; background: white;" title="${escapeHtml(student.name)}">
+          ${escapeHtml(student.name)}
+        </td>
+        ${cells}
+        <td class="px-2 py-2 text-center font-bold text-xs border border-slate-200 sticky-col-right pct-container" data-student-id="${student.id}" style="width:80px; max-width:80px; background: white;">
+          <div class="text-slate-400 font-normal text-[10px] mb-0.5">${diasAsistidos}/${totalDiasPosibles} d</div>
+          <div class="text-slate-700 text-sm">${attendancePercent}%</div>
+        </td>
+      </tr>
+    `;
+  }).join('');
+
+  // El diseño del contenedor de la tabla de asistencia con sus controles de fecha
+  return `
+    <div class="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between no-print">
+      <div class="flex flex-wrap items-center gap-2">
+        <label class="text-sm font-medium text-slate-600">Desde:
+          <input type="date" class="input-clay rounded-xl px-3 py-1.5 text-sm" data-action="set-attendance-dates" data-field="startDate" value="${storedStartDate}" />
+        </label>
+        <label class="text-sm font-medium text-slate-600">Hasta:
+          <input type="date" class="input-clay rounded-xl px-3 py-1.5 text-sm" data-action="set-attendance-dates" data-field="endDate" value="${storedEndDate}" />
+        </label>
+      </div>
+      <div class="flex items-center gap-2">
+        <span class="text-xs text-slate-500">Simbología: 🟢 Presente | 🔴 Falta | 🟡 Retardo | ◻️ Vacío</span>
+      </div>
+    </div>
+
+    <div class="attendance-scroll rounded-2xl border border-slate-200 max-w-full">
+      <table class="w-full border-collapse text-left text-xs text-slate-600">
+        <thead class="bg-slate-50 uppercase text-[10px] font-semibold text-slate-500">
+          <tr>
+            <th class="px-2 py-3 border border-slate-200 sticky-col" style="width:160px; min-width:160px; background: #f8fafc;">Alumno</th>
+            ${dayHeaders}
+            <th class="px-2 py-3 text-center border border-slate-200 sticky-col-right" style="width:80px; min-width:80px; background: #f8fafc;">% Asist.</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-200">
+          ${rows}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+      function renderEvaluationTab(subject) {
+        const assignedStudents = getSubjectStudents(subject);
+        const activities = (subject.activities || []).filter(Boolean);
+
+        return `
+          <div class="space-y-4">
+            ${activities.length ? `
+              <div class="overflow-x-auto relative">
+                <table class="min-w-full text-sm border-collapse" style="border:1px solid rgba(148,163,184,0.35);">
+                  <thead>
+                    <tr class="text-left text-slate-500">
+                      <th class="px-2 py-2 border border-slate-200 sticky-col bg-white">Alumno</th>
+                      ${activities.map((activity) => `<th class="px-2 py-2 border border-slate-200" style="min-width:140px;"><div class="flex items-center justify-between gap-2"><div><span style="width:12px;height:12px;border-radius:6px;background:${activity.color||'#8b6cf6'};display:inline-block;margin-right:6px"></span><span>${escapeHtml(activity.name)}</span><div class="text-xs text-slate-500">${activity.weight} pts · ${activity.date || ''}</div></div><div class="flex gap-1"><button type="button" class="text-slate-500 hover:text-slate-800" data-action="edit-activity" data-id="${activity.id}" title="Editar actividad">✏️</button><button type="button" class="text-slate-500 hover:text-red-600" data-action="delete-activity" data-id="${activity.id}" title="Eliminar actividad">🗑️</button></div></div></th>`).join('')}
+                      <th class="px-2 py-2 border border-slate-200 sticky-col-right bg-white">Promedio</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${assignedStudents.map((student) => {
+                      const studentGrades = subject.evaluations?.[student.id] || {};
+                      const weightedSum = activities.reduce((sum, activity) => {
+                        const rawValue = studentGrades[activity.id] ?? studentGrades[activity.name] ?? '';
+                        if (rawValue === '') return sum;
+                        return sum + (Number(rawValue) * activity.weight);
+                      }, 0);
+                      const totalWeight = activities.reduce((sum, activity) => {
+                        const rawValue = studentGrades[activity.id] ?? studentGrades[activity.name] ?? '';
+                        return sum + (rawValue === '' ? 0 : activity.weight);
+                      }, 0);
+                      const average = totalWeight ? (weightedSum / totalWeight).toFixed(1) : '—';
+                      return `
+                        <tr>
+                          <td class="px-2 py-2 font-medium border border-slate-200 sticky-col bg-white">${escapeHtml(student.name)}</td>
+                          ${activities.map((activity) => `
+                            <td class="px-2 py-2 border border-slate-200">
+                              <input class="input-clay w-20 rounded-xl px-2 py-2 text-sm outline-none" type="number" step="0.1" value="${studentGrades[activity.id] ?? studentGrades[activity.name] ?? ''}" data-student-id="${student.id}" data-activity="${activity.id}" />
+                            </td>
+                          `).join('')}
+                          <td class="px-2 py-2 font-semibold border border-slate-200 sticky-col-right bg-white">${average}</td>
+                        </tr>
+                      `;
+                    }).join('')}
+                  </tbody>
+                </table>
+              </div>
+            ` : '<p class="text-sm text-slate-500">Crea una actividad para empezar a registrar notas.</p>'}
+          </div>
+        `;
+      }
+
+      function renderActivitiesTab(subject) {
+        const categoryChips = defaultActivityCategories.map((activity) => `
+          <span class="inline-flex items-center gap-2 rounded-2xl px-3 py-2 text-sm font-semibold text-white" style="background:${activity.color};">
+            ${escapeHtml(activity.name)}
+          </span>
+        `).join('');
+
+        const editingActivity = editingActivityId ? (subject.activities || []).find((activity) => activity.id === editingActivityId) : null;
+        const activityNameValue = editingActivity ? escapeHtml(editingActivity.name) : '';
+        const activityWeightValue = editingActivity ? escapeHtml(editingActivity.weight) : '';
+        const selectedCategoryId = editingActivity ? (defaultActivityCategories.find((cat) => cat.color === editingActivity.color)?.id || defaultActivityCategories[0].id) : defaultActivityCategories[0].id;
+        const actionLabel = editingActivity ? 'Actualizar actividad' : 'Agregar actividad';
+
+        return `
+          <div class="space-y-4">
+            <div class="flex flex-wrap gap-2 mb-4">${categoryChips}</div>
+            <form id="activityForm" class="grid gap-3 md:grid-cols-[1.4fr_1fr_0.8fr_0.4fr_auto] mb-4">
+              <input id="activityName" class="input-clay rounded-2xl px-4 py-3 outline-none" placeholder="Nombre de la actividad" required value="${activityNameValue}" />
+              <select id="activityCategory" class="input-clay rounded-2xl px-4 py-3 outline-none">
+                ${defaultActivityCategories.map((category) => `<option value="${escapeHtml(category.id)}" ${category.id === selectedCategoryId ? 'selected' : ''}>${escapeHtml(category.name)}</option>`).join('')}
+              </select>
+              <input id="activityWeight" type="number" min="0" step="0.1" class="input-clay rounded-2xl px-4 py-3 outline-none" placeholder="Ponderación" value="${activityWeightValue}" />
+              <div></div>
+              <div class="flex gap-2">
+                <button type="submit" class="clay-button rounded-2xl px-4 py-3 font-semibold">${actionLabel}</button>
+                ${editingActivity ? `<button type="button" class="clay-button rounded-2xl px-4 py-3 font-semibold" data-action="cancel-activity-edit">Cancelar</button>` : ''}
+              </div>
+            </form>
+            ${renderEvaluationTab(subject)}
+          </div>
+        `;
+      }
+
+      function renderAlumnosView() {
+        const subjects = appData.subjects || [];
+        const editingList = editingStudentListId ? appData.studentLists.find((item) => item.id === editingStudentListId) : null;
+        const studentLists = [...(appData.studentLists || [])].sort((a, b) => a.name.localeCompare(b.name));
+
+        contentArea.innerHTML = `
+          <section class="space-y-6">
+            <div class="clay-card rounded-[30px] p-5 md:p-6">
+              <div class="mb-4 flex items-center justify-between gap-3">
+                <div>
+                  <p class="text-sm font-semibold uppercase tracking-[0.24em] text-slate-500">Crear lista</p>
+                  <h3 class="text-xl font-semibold">Pon un nombre y arma la lista (una línea por alumno)</h3>
+                </div>
+                <div class="chip rounded-full px-3 py-2 text-sm">${studentLists.length} listas</div>
+              </div>
+
+              <form id="studentListForm" class="space-y-4">
+                <div class="grid gap-3 md:grid-cols-[1fr_auto]">
+                  <input id="listNameInput" class="input-clay w-full rounded-2xl px-4 py-3 outline-none" placeholder="Nombre de la lista" value="${escapeHtml(draftListName)}" required />
+                  <div class="flex gap-2">
+                    <label class="clay-button cursor-pointer rounded-2xl px-4 py-3 font-semibold">
+                      Agregar desde archivo
+                      <input type="file" accept=".txt,.csv" class="hidden" data-list-file="true" />
+                    </label>
+                    <button type="submit" class="clay-button rounded-2xl px-4 py-3 font-semibold">Guardar lista</button>
+                  </div>
+                </div>
+
+                <textarea id="listTextarea" class="input-clay w-full min-h-[160px] rounded-[16px] px-4 py-3 outline-none" placeholder="Escribe un nombre por línea (Enter para nueva línea)">${escapeHtml(draftListEntries.join('\n'))}</textarea>
+              </form>
+            </div>
+
+            <div class="mt-5 space-y-3">
+              <div class="flex items-center justify-between gap-3">
+                <h4 class="text-lg font-semibold">Listas guardadas</h4>
+                <div class="chip rounded-full px-3 py-2 text-sm">${studentLists.length}</div>
+              </div>
+              ${studentLists.length ? studentLists.map((list) => {
+                return `
+                  <div class="list-card rounded-[24px] bg-white/60 p-3">
+                    <div class="mb-2 flex items-start justify-between gap-3">
+                      <div>
+                        <p class="font-semibold">${escapeHtml(list.name)}</p>
+                        <p class="text-sm text-slate-500">${(list.studentIds || []).length} alumnos · ${(list.subjectIds || []).length} materias</p>
+                       ${list.subjectIds && list.subjectIds.length ? `
+                          <div class="text-sm text-slate-500 mt-2">
+                            <span class="block mb-1 font-medium text-xs text-slate-400 uppercase tracking-wider">Materias vinculadas:</span>
+                            <div class="flex flex-wrap gap-1.5">
+                              ${list.subjectIds.map((subjectId) => {
+                                const subject = subjects.find((item) => item.id === subjectId);
+                                if (!subject) return '';
+                                return `
+                                  <span class="inline-flex items-center gap-1.5 bg-slate-100/80 text-slate-700 px-2.5 py-1 rounded-full text-xs border border-slate-200">
+                                    ${escapeHtml(subject.name)}
+                                    <button type="button" 
+                                            class="text-slate-400 hover:text-red-500 font-bold transition-colors ml-0.5" 
+                                            data-action="remove-subject-from-list" 
+                                            data-list-id="${list.id}" 
+                                            data-subject-id="${subject.id}" 
+                                            title="Quitar materia">
+                                      ×
+                                    </button>
+                                  </span>
+                                `;
+                              }).filter(Boolean).join('')}
+                            </div>
+                          </div>
+                        ` : ''}
+                      </div>
+                      <div class="flex gap-2">
+                        <button class="clay-button rounded-2xl px-3 py-2 text-sm" data-action="view-student-list" data-id="${list.id}">${viewingStudentListId === list.id ? 'Ocultar' : 'Ver'}</button>
+                        <button class="clay-button rounded-2xl px-3 py-2 text-sm" data-action="edit-student-list" data-id="${list.id}">Editar</button>
+                        <button class="clay-button rounded-2xl px-3 py-2 text-sm" data-action="delete-student-list" data-id="${list.id}">Eliminar</button>
+                      </div>
+                    </div>
+                    ${viewingStudentListId === list.id ? `
+                      <div class="mb-3 rounded-[20px] bg-slate-50 p-3 text-sm text-slate-700">
+                        <p class="font-semibold mb-2">Alumnos en la lista:</p>
+                        <ol class="list-decimal pl-5 space-y-1">
+                          ${(list.studentIds || []).map((studentId) => {
+                            const student = appData.students.find((item) => item.id === studentId);
+                            return `<li>${escapeHtml(student?.name || 'Alumno')}</li>`;
+                          }).join('')}
+                        </ol>
+                      </div>
+                    ` : ''}
+                    <div class="grid gap-2 md:grid-cols-[1fr_auto]">
+                      <div class="grid gap-2 md:grid-cols-[1fr_auto]">
+                        <select class="input-clay w-full rounded-2xl px-3 py-2 outline-none">
+                          <option value="">Selecciona una materia</option>
+                          ${subjects.map((subjectItem) => `<option value="${subjectItem.id}">${escapeHtml(subjectItem.name)}</option>`).join('')}
+                        </select>
+                        <button class="clay-button rounded-2xl px-3 py-2 text-sm" data-action="assign-list-to-subject" data-id="${list.id}">Asignar</button>
+                      </div>
+                    </div>
+                  </div>
+                `;
+              }).join('') : '<p class="text-sm text-slate-500">Aún no hay listas. Crea la primera para agrupar alumnos.</p>'}
+            </div>
+          </section>
+        `;
+      }
+
+      function syncSubjectStudentsFromLists(subject) {
+        const listIds = subject.studentListIds || [];
+        const listMembers = listIds.flatMap((listId) => {
+          const list = appData.studentLists.find((item) => item.id === listId);
+          return list?.studentIds || [];
+        });
+        const mergedIds = Array.from(new Set([...(subject.students || []), ...listMembers]));
+        subject.students = mergedIds;
+      }
+
+      function syncListSubjects(list, selectedSubjectIds) {
+        list.subjectIds = selectedSubjectIds || [];
+        appData.subjects.forEach((subject) => {
+          const hasList = (subject.studentListIds || []).includes(list.id);
+          const shouldHaveList = list.subjectIds.includes(subject.id);
+          if (shouldHaveList && !hasList) {
+            subject.studentListIds = [...new Set([...(subject.studentListIds || []), list.id])];
+          }
+          if (!shouldHaveList && hasList) {
+            subject.studentListIds = (subject.studentListIds || []).filter((id) => id !== list.id);
+          }
+        });
+      }
+
+      function readTextFromFile(file) {
+        return new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result || '');
+          reader.onerror = () => resolve('');
+          reader.readAsText(file);
+        });
+      }
+
+      function getSubjectStudents(subject) {
+        if (subject.activeListId) {
+          const list = appData.studentLists.find((item) => item.id === subject.activeListId);
+          return (list?.studentIds || [])
+            .map((studentId) => appData.students.find((student) => student.id === studentId))
+            .filter(Boolean);
+        }
+        return (subject.students || [])
+          .map((studentId) => appData.students.find((student) => student.id === studentId))
+          .filter(Boolean);
+      }
+
+      function renderPerfilView() {
+        const profile = appData.profile || defaultData.profile;
+        contentArea.innerHTML = `
+          <section class="clay-card rounded-[30px] p-5 md:p-6">
+            <div class="mb-5">
+              <p class="text-sm font-semibold uppercase tracking-[0.24em] text-slate-500">Mi perfil</p>
+              <h3 class="text-xl font-semibold">Personaliza tus datos docentes</h3>
+            </div>
+            <form id="profileForm" class="grid gap-4 md:grid-cols-2">
+              <label class="block md:col-span-2">
+                <span class="mb-1 block text-sm font-medium">Nombre completo</span>
+                <input id="profileName" class="input-clay w-full rounded-2xl px-4 py-3 outline-none" value="${escapeHtml(profile.nombre)}" required />
+              </label>
+              <label class="block">
+                <span class="mb-1 block text-sm font-medium">Institución escolar</span>
+                <input id="profileInstitution" class="input-clay w-full rounded-2xl px-4 py-3 outline-none" value="${escapeHtml(profile.institucion)}" />
+              </label>
+              <label class="block">
+                <span class="mb-1 block text-sm font-medium">Ciclo escolar</span>
+                <input id="profileCycle" class="input-clay w-full rounded-2xl px-4 py-3 outline-none" value="${escapeHtml(profile.ciclo)}" />
+              </label>
+              <label class="block md:col-span-2">
+                <span class="mb-1 block text-sm font-medium">Correo</span>
+                <input id="profileEmail" type="email" class="input-clay w-full rounded-2xl px-4 py-3 outline-none" value="${escapeHtml(profile.correo)}" />
+              </label>
+              <div class="md:col-span-2">
+                <button type="submit" class="clay-button rounded-2xl px-4 py-3 font-semibold">Guardar perfil</button>
+              </div>
+            </form>
+          </section>
+        `;
+      }
+
+      function renderReportesView() {
+        const subjects = appData.subjects || [];
+        const reportRows = buildRiskReportRows();
+
+        contentArea.innerHTML = `
+          <section class="space-y-6">
+            <div class="clay-card rounded-[30px] p-5 md:p-6">
+              <div class="mb-4 flex items-center justify-between gap-3">
+                <div>
+                  <p class="text-sm font-semibold uppercase tracking-[0.24em] text-slate-500">Reportes</p>
+                  <h3 class="text-xl font-semibold">Exporta y revisa el estado del grupo</h3>
+                </div>
+                <button class="clay-button rounded-2xl px-4 py-3 font-semibold" data-action="export-csv">Exportar sábanas a CSV</button>
+              </div>
+              <p class="text-sm text-slate-500">El CSV se descarga automáticamente compatible con Excel.</p>
+            </div>
+
+            <div class="clay-card rounded-[30px] p-5 md:p-6">
+              <div class="mb-4 flex items-center justify-between gap-3">
+                <div>
+                  <h3 class="text-xl font-semibold">Semáforo de riesgo</h3>
+                  <p class="text-sm text-slate-500">Alumnos con promedio reprobatorio o más del 20% de faltas.</p>
+                </div>
+                <button class="clay-button rounded-2xl px-4 py-3 font-semibold" data-action="print-risk-report">Imprimir/PDF</button>
+              </div>
+              <div class="space-y-3">
+                ${reportRows.length ? reportRows.map((row) => `
+                  <div class="print-card rounded-[24px] bg-white/70 p-4">
+                    <div class="flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <p class="font-semibold">${escapeHtml(row.studentName)}</p>
+                        <p class="text-sm text-slate-500">${escapeHtml(row.subjectName)}</p>
+                      </div>
+                      <div class="flex flex-wrap gap-2 text-sm">
+                        <span class="chip rounded-full px-3 py-2">Promedio: ${row.average}</span>
+                        <span class="chip rounded-full px-3 py-2">Faltas: ${row.absencePercent}%</span>
+                        <span class="chip rounded-full px-3 py-2">Estado: ${row.status}</span>
+                      </div>
+                    </div>
+                  </div>
+                `).join('') : '<p class="text-sm text-slate-500">Aún no hay alumnos en riesgo para mostrar.</p>'}
+              </div>
+            </div>
+          </section>
+        `;
+      }
+
+      function buildRiskReportRows() {
+        const rows = [];
+        appData.subjects.forEach((subject) => {
+          (subject.students || []).forEach((studentId) => {
+            const student = appData.students.find((item) => item.id === studentId);
+            if (!student) return;
+            const evaluations = subject.evaluations?.[studentId] || {};
+            const values = Object.values(evaluations).filter((value) => value !== '').map(Number);
+            const average = values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : 0;
+            const attendanceEntries = Object.values(subject.attendanceByDate || {}).flatMap((day) => Object.entries(day));
+            const studentAttendanceEntries = attendanceEntries.filter(([id]) => id === studentId);
+            const absenceCount = studentAttendanceEntries.filter(([, state]) => state === 'falta').length;
+            const absencePercent = studentAttendanceEntries.length ? (absenceCount / studentAttendanceEntries.length) * 100 : 0;
+            if (average < 70 || absencePercent > 20) {
+              rows.push({
+                subjectName: subject.name,
+                studentName: student.name,
+                average: average.toFixed(1),
+                absencePercent: absencePercent.toFixed(1),
+                status: average < 70 ? 'Reprobatorio' : 'Alerta de faltas'
+              });
+            }
+          });
+        });
+        return rows.sort((a, b) => a.studentName.localeCompare(b.studentName));
+      }
+
+      function exportNotesCsv() {
+        const subjects = appData.subjects || [];
+        const rows = [];
+        const profile = appData.profile || defaultData.profile;
+        rows.push(['Docente', profile.nombre || '']);
+        rows.push(['Institución', profile.institucion || '']);
+        rows.push(['Ciclo', profile.ciclo || '']);
+        rows.push([]);
+        subjects.forEach((subject) => {
+          const students = [...(subject.students || [])]
+            .map((studentId) => appData.students.find((student) => student.id === studentId))
+            .filter(Boolean)
+            .sort((a, b) => a.name.localeCompare(b.name));
+          const activities = (subject.activities || []).filter(Boolean);
+          rows.push([subject.name]);
+          rows.push(['Alumno', ...activities.map((activity) => activity.name), 'Promedio']);
+          students.forEach((student) => {
+            const evaluations = subject.evaluations?.[student.id] || {};
+            const values = activities.map((activity) => evaluations[activity.id] ?? evaluations[activity.name] ?? '');
+            const gradeValues = values.filter((v) => v !== '').map(Number);
+            const average = gradeValues.length ? (gradeValues.reduce((sum, value) => sum + value, 0) / gradeValues.length).toFixed(1) : '—';
+            rows.push([student.name, ...values, average]);
+          });
+          rows.push([]);
+        });
+        const csv = rows.map((row) => row.map(escapeCsv).join(',')).join('\n');
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'sabanas-notas.csv';
+        a.click();
+        URL.revokeObjectURL(url);
+        showToast('CSV descargado');
+      }
+
+      function splitNames(raw) {
+        return raw
+          .split(/\n|,|;|\t/)
+          .map((item) => item.trim())
+          .filter(Boolean)
+          .filter((name, index, arr) => name && arr.indexOf(name) === index);
+      }
+
+      function showApp() {
+        loginScreen.classList.add('hidden');
+        mainApp.classList.remove('hidden');
+      }
+
+      function hideApp() {
+        loginScreen.classList.remove('hidden');
+        mainApp.classList.add('hidden');
+      }
+
+      function showToast(message) {
+        toast.textContent = message;
+        toast.classList.remove('hidden');
+        clearTimeout(showToast.timeout);
+        showToast.timeout = setTimeout(() => {
+          toast.classList.add('hidden');
+        }, 1800);
+      }
+
+      function saveData() {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(appData));
+      }
+
+      function isValidCredentials(username, password) {
+        return Boolean(username && password);
+      }
+
+      function loadData() {
+        const stored = localStorage.getItem(STORAGE_KEY);
+        if (!stored) {
+          return JSON.parse(JSON.stringify(defaultData));
+        }
+        try {
+          const parsed = JSON.parse(stored);
+          return {
+            ...JSON.parse(JSON.stringify(defaultData)),
+            ...parsed,
+            profile: { ...defaultData.profile, ...(parsed.profile || {}) },
+            auth: { ...defaultData.auth, ...(parsed.auth || {}) },
+            subjects: parsed.subjects || [],
+            students: parsed.students || [],
+            studentLists: parsed.studentLists || []
+          };
+        } catch (error) {
+          return JSON.parse(JSON.stringify(defaultData));
+        }
+      }
+
+      function createId() {
+        return (window.crypto && crypto.randomUUID ? crypto.randomUUID() : 'id-' + Date.now().toString(36) + Math.random().toString(36).slice(2));
+      }
+
+      function escapeHtml(text) {
+        return String(text)
+          .replaceAll('&', '&amp;')
+          .replaceAll('<', '&lt;')
+          .replaceAll('>', '&gt;')
+          .replaceAll('"', '&quot;')
+          .replaceAll("'", '&#39;');
+      }
+
+      function escapeCsv(value) {
+        const text = String(value ?? '');
+        return /[",\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
+      }
+
+      function getTodayKey() {
+        return new Date().toISOString().slice(0, 10);
+      }
+
+      function addDays(dateString, offset) {
+        const date = new Date(dateString);
+        date.setDate(date.getDate() + offset);
+        return date.toISOString().slice(0, 10);
+      }
+
+      function getDateRange(start, end) {
+        const dates = [];
+        let current = new Date(start);
+        const limit = new Date(end);
+        while (current <= limit) {
+          dates.push(current.toISOString().slice(0, 10));
+          current.setDate(current.getDate() + 1);
+        }
+        return dates;
+      }
+
+      function getCurrentWeekDates(referenceDate) {
+        const date = new Date(referenceDate);
+        const dayOfWeek = date.getDay();
+        const monday = new Date(date);
+        monday.setDate(date.getDate() - ((dayOfWeek + 6) % 7));
+        const dates = [];
+        for (let i = 0; i < 7; i += 1) {
+          const current = new Date(monday);
+          current.setDate(monday.getDate() + i);
+          dates.push(current.toISOString().slice(0, 10));
+        }
+        return dates;
+      }
+
+      function getWeekdaysInRange(startDate, endDate) {
+        const dates = [];
+        let current = new Date(startDate);
+        const limit = new Date(endDate);
+        while (current <= limit) {
+          const dayOfWeek = current.getDay();
+          // 1 = Monday, 5 = Friday (1-5 are weekdays)
+          if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+            dates.push(current.toISOString().slice(0, 10));
+          }
+          current.setDate(current.getDate() + 1);
+        }
+        return dates;
+      }
+    // Función auxiliar para actualizar los porcentajes en tiempo real con el formato estético correcto
+      function updateUiPercentagesInRealTime(subject, students) {
+        const startInput = contentArea.querySelector('input[data-field="startDate"]');
+        const endInput = contentArea.querySelector('input[data-field="endDate"]');
+        if (startInput && endInput) {
+          const dates = getWeekdaysInRange(startInput.value, endInput.value);
+          const totalDias = dates.length;
+
+          if (totalDias > 0) {
+            students.forEach((student) => {
+              let asistencias = 0;
+              dates.forEach(d => {
+                if (subject.attendanceByDate[d]?.[student.id] === 'presente') {
+                  asistencias++;
+                }
+              });
+
+              const nuevoPorcentaje = Math.round((asistencias / totalDias) * 100);
+
+              const pctContainer = contentArea.querySelector(`.pct-container[data-student-id="${student.id}"]`);
+              if (pctContainer) {
+                pctContainer.innerHTML = `
+                  <div class="text-slate-400 font-normal text-[10px] mb-0.5">${asistencias}/${totalDias} d</div>
+                  <div class="text-slate-700 text-sm font-semibold">${nuevoPorcentaje}%</div>
+                `;
+              }
+            });
+          }
+        }
+      }
+      function scrollAttendanceToToday() {
+        const current = contentArea.querySelector('[data-current-day]');
+        if (current) {
+          window.requestAnimationFrame(() => {
+            current.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+          });
+        }
+      }
+
+      document.addEventListener('input', (event) => {
+        const target = event.target;
+        if (target.matches('input[data-student-id][data-activity]')) {
+          const subject = appData.subjects.find((item) => item.id === activeSubjectId);
+          if (!subject) return;
+          if (!subject.evaluations) subject.evaluations = {};
+          if (!subject.evaluations[target.dataset.studentId]) subject.evaluations[target.dataset.studentId] = {};
+          subject.evaluations[target.dataset.studentId][target.dataset.activity] = target.value;
+          saveData();
+        }
+      });
+    </script>
+  </body>
+</html>
