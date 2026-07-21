@@ -3,8 +3,16 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Gestor de Aula Clay</title>
+    <title>Gestor de Aula</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Librería gratuita para leer archivos PDF -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <!-- Librería para generar Gráficas Interactivas -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    </script>
+  
     <style>
       :root {
         --bg: #f8efe8;
@@ -125,12 +133,8 @@
         </div>
         <form id="loginForm" class="space-y-4">
           <label class="block">
-            <span class="mb-1 block text-sm font-medium">Usuario</span>
-            <input id="username" class="input-clay w-full rounded-2xl px-4 py-3 outline-none" placeholder="Usuario" required />
-          </label>
-          <label class="block">
-            <span class="mb-1 block text-sm font-medium">Contraseña</span>
-            <input id="password" type="password" class="input-clay w-full rounded-2xl px-4 py-3 outline-none" placeholder="Contraseña" required />
+            <span class="mb-1 block text-sm font-medium">Matrícula </span>
+            <input id="username" class="input-clay w-full rounded-2xl px-4 py-3 outline-none uppercase" placeholder="Contraseña" required />
           </label>
           <button type="submit" class="clay-button w-full rounded-2xl px-4 py-3 font-semibold">Entrar al panel</button>
         </form>
@@ -176,7 +180,7 @@
     <script>
       const STORAGE_KEY = 'clayTeacherAppData';
       const defaultData = {
-        auth: { username: '', password: '' },
+        auth: { username: '' },
         profile: { nombre: '', institucion: '', ciclo: '', correo: '' },
         subjects: [],
         students: [],
@@ -188,15 +192,15 @@
         { id: 'proyecto', name: 'Proyecto', weight: 2, color: '#2563eb' },
         { id: 'examen', name: 'Examen', weight: 3, color: '#dc2626' },
         { id: 'ejercicio', name: 'Ejercicio', weight: 1, color: '#16a34a' },
-        { id: 'otros', name: 'Otros', weight: 1, color: '#8b5cf6' }
+        { id: 'otros', name: 'Otros', weight: 1, color: '#8b6cf6' }
       ];
 
       let appData = loadData();
-      // Añade esto donde declaras tus variables globales al inicio de la etiqueta <script>
-      let attendanceBackups = {}; // Guardará el estado anterior por cada fecha
+      let attendanceBackups = {}; 
       let currentView = 'materias';
       let activeSubjectId = null;
       let activeSubjectTab = 'asistencia';
+
       let editingSubjectId = null;
       let editingStudentId = null;
       let editingStudentListId = null;
@@ -205,8 +209,13 @@
       let draftListName = '';
       let draftListEntries = [];
       let draftListText = '';
-      // Always require login on each page open
       let isLoggedIn = false;
+
+      // Variables para la vista de reportes
+      let activeReportTab = 'lista';
+      let selectedReportListId = null;
+      let selectedReportStudentId = null;
+      let activeChartInstance = null;
 
       const loginScreen = document.getElementById('loginScreen');
       const mainApp = document.getElementById('mainApp');
@@ -227,27 +236,27 @@
       }
 
       function bindGlobalEvents() {
-        // Login handler with error trapping and fallback button click
         const doLogin = (ev) => {
           try {
             if (ev && ev.preventDefault) ev.preventDefault();
+            
             const usernameEl = document.getElementById('username');
-            const passwordEl = document.getElementById('password');
-            if (!usernameEl || !passwordEl) {
-              showToast('Error: campos de login no encontrados');
-              console.error('Login fields missing', { usernameEl, passwordEl });
+            if (!usernameEl) {
+              showToast('Error: campo de ingreso no encontrado');
               return;
             }
-            const username = usernameEl.value.trim();
-            const password = passwordEl.value.trim();
-            if (isValidCredentials(username, password)) {
-              appData.auth = { username, password };
+            
+            const entrada = usernameEl.value.trim().toUpperCase();
+            const accesosValidos = ['AULA2026', 'PEPE VERBER'];
+            
+            if (accesosValidos.includes(entrada)) {
+              appData.auth = { username: 'Pepe Verber' };
               saveData();
-              isLoggedIn = true; // do not persist session to force login next open
+              isLoggedIn = true;
               showApp();
-              showToast('Acceso correcto');
+              showToast('¡Bienvenido, Pepe Verber!');
             } else {
-              showToast('Ingresa usuario y contraseña');
+              showToast('Matrícula o usuario no válido');
             }
           } catch (err) {
             console.error('Login error', err);
@@ -256,8 +265,6 @@
         };
 
         if (loginForm) loginForm.addEventListener('submit', doLogin);
-        const loginButton = loginForm?.querySelector('button[type="submit"]');
-        if (loginButton) loginButton.addEventListener('click', doLogin);
 
         logoutBtn.addEventListener('click', () => {
           isLoggedIn = false;
@@ -282,7 +289,6 @@
 
       function handleContentClick(event) {
         const button = event.target.closest('button');
-
         if (!button) return;
 
         const action = button.getAttribute('data-action');
@@ -331,7 +337,7 @@
           saveData();
           render();
         }
-        // 1. APLICAR ASISTENCIA GENERAL (Y respaldar el estado anterior)
+
         if (action === 'bulk-attendance-present') {
           const subject = appData.subjects.find((item) => item.id === activeSubjectId);
           if (!subject) return;
@@ -344,24 +350,20 @@
           if (!subject.attendanceByDate) subject.attendanceByDate = {};
           if (!subject.attendanceByDate[date]) subject.attendanceByDate[date] = {};
 
-          // RESPALDO: Guardamos una copia exacta del estado de asistencia de este día antes de alterarlo
           const backupKey = `${subject.id}_${date}`;
           attendanceBackups[backupKey] = { ...subject.attendanceByDate[date] };
 
-          // Marcamos presente (🟢) a todos
           students.forEach((student) => {
             subject.attendanceByDate[date][student.id] = 'presente';
           });
 
           saveData();
 
-          // Cambiamos visualmente todos los botones de la columna a 🟢 al instante
           const individualButtons = contentArea.querySelectorAll(`[data-action="toggle-cell"][data-date="${date}"]`);
           individualButtons.forEach((btn) => {
             btn.textContent = '🟢';
           });
 
-          // Actualizamos el botón de la cabecera para que ahora diga "Deshacer"
           button.outerHTML = `
             <button type="button" 
                     class="mt-1 bg-slate-100 hover:bg-slate-200 text-slate-600 text-[10px] font-medium px-1.5 py-0.5 rounded-md border border-slate-300 transition-colors flex items-center gap-1"
@@ -372,12 +374,10 @@
             </button>
           `;
 
-          // Recalculamos porcentajes en el DOM al instante
           updateUiPercentagesInRealTime(subject, students);
-          showToast(`Asistencia general aplicada. Puedes "Deshacer" si te equivocaste.`);
+          showToast(`Asistencia general aplicada.`);
         }
 
-        // 2. DESHACER ASISTENCIA GENERAL (Y restaurar el estado anterior)
         if (action === 'undo-bulk-attendance') {
           const subject = appData.subjects.find((item) => item.id === activeSubjectId);
           if (!subject) return;
@@ -387,19 +387,15 @@
           const students = getSubjectStudents(subject);
           const backupKey = `${subject.id}_${date}`;
 
-          // Si existe un respaldo guardado, lo restauramos
           if (attendanceBackups[backupKey]) {
             subject.attendanceByDate[date] = { ...attendanceBackups[backupKey] };
-            // Limpiamos el respaldo de la memoria una vez usado
             delete attendanceBackups[backupKey];
           } else {
-            // Si por alguna razón no había respaldo, simplemente limpiamos el día
             subject.attendanceByDate[date] = {};
           }
 
           saveData();
 
-          // Restauramos visualmente los emojis de cada celda en la columna al instante
           const individualButtons = contentArea.querySelectorAll(`[data-action="toggle-cell"][data-date="${date}"]`);
           individualButtons.forEach((btn) => {
             const studentId = btn.getAttribute('data-student-id');
@@ -408,7 +404,6 @@
             btn.textContent = label;
           });
 
-          // Regresamos el botón de la cabecera a su estado original "Todos"
           button.outerHTML = `
             <button type="button" 
                     class="mt-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 text-[10px] font-medium px-1.5 py-0.5 rounded-md border border-emerald-200/60 transition-colors flex items-center gap-1"
@@ -419,10 +414,10 @@
             </button>
           `;
 
-          // Recalculamos porcentajes en el DOM al instante
           updateUiPercentagesInRealTime(subject, students);
           showToast(`Se restauraron las asistencias anteriores.`);
         }
+
         if (action === 'toggle-cell') {
           const subject = appData.subjects.find((item) => item.id === activeSubjectId);
           if (!subject) return;
@@ -441,18 +436,13 @@
             subject.attendanceByDate[date][studentId] = next;
           }
           
-          // Guardamos los datos localmente
           saveData();
           
-          // 1. UPDATE OPTIMISTA: Cambiamos solo el texto del botón en el DOM
           const label = next === 'presente' ? '🟢' : next === 'falta' ? '🔴' : next === 'retardo' ? '🟡' : '◻️';
           button.textContent = label;
           
-          // 2. ACTUALIZACIÓN EN TIEMPO REAL DEL PORCENTAJE (sin renderizar todo)
-          // Buscamos la fila (tr) donde se hizo clic
           const row = button.closest('tr');
           if (row) {
-            // Obtenemos todas las fechas configuradas para el ciclo actual
             const storedStartDate = subject.attendanceStartDate || addDays(getTodayKey(), -30);
             const storedEndDate = subject.attendanceEndDate || getTodayKey();
             const attendanceDates = getWeekdaysInRange(storedStartDate, storedEndDate);
@@ -460,8 +450,6 @@
 
             if (totalDiasPosibles > 0) {
               let diasAsistidos = 0;
-              
-              // Recorremos las celdas de esta fila para contar los "presente" reales en los datos actualizados
               attendanceDates.forEach(d => {
                 if (subject.attendanceByDate[d]?.[studentId] === 'presente') {
                   diasAsistidos++;
@@ -469,8 +457,6 @@
               });
 
               const attendancePercent = Math.round((diasAsistidos / totalDiasPosibles) * 100);
-
-              // Buscamos la celda del porcentaje al final de la fila (sticky-col-right)
               const percentCell = row.querySelector('.sticky-col-right');
               if (percentCell) {
                 percentCell.innerHTML = `
@@ -482,37 +468,6 @@
               }
             }
           }
-        }
-
-        if (action === 'save-attendance') {
-          const subject = appData.subjects.find((item) => item.id === activeSubjectId);
-          if (!subject) return;
-          saveData();
-          showToast('Asistencia guardada');
-          render();
-        }
-
-        if (action === 'edit-student') {
-          editingStudentId = id;
-          render();
-        }
-
-        if (action === 'add-list-row') {
-          draftListEntries.push('');
-          render();
-        }
-
-        if (action === 'remove-list-row') {
-          const index = Number(button.getAttribute('data-index'));
-          draftListEntries.splice(index, 1);
-          render();
-        }
-
-        if (action === 'clear-list-builder') {
-          draftListName = '';
-          draftListEntries = [];
-          editingStudentListId = null;
-          render();
         }
 
         if (action === 'edit-student-list') {
@@ -541,17 +496,6 @@
           saveData();
           render();
           showToast('Lista eliminada');
-        }
-
-        if (action === 'delete-student') {
-          if (!window.confirm('¿Estás seguro de eliminar este alumno?')) return;
-          appData.students = appData.students.filter((item) => item.id !== id);
-          appData.subjects.forEach((subject) => {
-            subject.students = (subject.students || []).filter((studentId) => studentId !== id);
-          });
-          saveData();
-          render();
-          showToast('Alumno eliminado');
         }
 
         if (action === 'assign-list-to-subject') {
@@ -625,6 +569,7 @@
         if (action === 'print-risk-report') {
           window.print();
         }
+
         if (action === 'remove-subject-from-list') {
           const listId = button.getAttribute('data-list-id');
           const subjectId = button.getAttribute('data-subject-id');
@@ -634,26 +579,23 @@
           
           if (list && subject) {
             if (!window.confirm(`¿Estás seguro de quitar la materia "${subject.name}" de la lista "${list.name}"?`)) return;
-            
-            // 1. Quitar la materia de la lista
             list.subjectIds = (list.subjectIds || []).filter(id => id !== subjectId);
-            
-            // 2. Quitar la lista de la materia
             subject.studentListIds = (subject.studentListIds || []).filter(id => id !== listId);
             
-            // Si la lista quitada era la activa en la materia, la reseteamos
             if (subject.activeListId === listId) {
               subject.activeListId = null;
             }
             
-            // 3. Sincronizar alumnos de la materia (recalcula los alumnos basándose en las listas restantes)
             syncSubjectStudentsFromLists(subject);
-            
-            // Guardar y renderizar de nuevo
             saveData();
             render();
             showToast(`Materia quitada de la lista`);
           }
+        }
+
+        if (action === 'switch-report-tab') {
+          activeReportTab = button.getAttribute('data-tab');
+          render();
         }
       }
 
@@ -669,14 +611,6 @@
           return;
         }
 
-        if (target.classList.contains('draft-name-input')) {
-          const index = Number(target.getAttribute('data-draft-list-index'));
-          if (!Number.isNaN(index)) {
-            draftListEntries[index] = target.value;
-          }
-        }
-
-        // Handle attendance date range changes
         if (target.getAttribute('data-action') === 'set-attendance-dates') {
           const subject = appData.subjects.find((item) => item.id === activeSubjectId);
           if (!subject) return;
@@ -685,7 +619,6 @@
           if (field === 'startDate') {
             subject.attendanceStartDate = value;
           } else if (field === 'endDate') {
-
             subject.attendanceEndDate = value;
           }
           saveData();
@@ -698,16 +631,18 @@
         if (target.matches('input[type="file"][data-list-file]')) {
           const file = target.files?.[0];
           if (!file) return;
-          readTextFromFile(file).then((text) => {
-            const names = splitNames(text);
-            if (names.length) {
-              // Replace the textarea content with loaded names for review
-              draftListEntries = names;
-              draftListText = names.join('\n');
-              render();
-              showToast(`${names.length} nombres cargados`);
-            }
-          });
+          processUploadedFile(file);
+        }
+
+        if (target.id === 'reportListSelect') {
+          selectedReportListId = target.value;
+          selectedReportStudentId = null; // Reiniciar alumno cuando cambia la lista
+          render();
+        }
+
+        if (target.id === 'reportStudentSelect') {
+          selectedReportStudentId = target.value;
+          render();
         }
       }
 
@@ -752,26 +687,6 @@
             showToast('Materia creada');
           }
           editingSubjectId = null;
-          form.reset();
-          saveData();
-          render();
-        }
-
-        if (form.id === 'studentForm') {
-          const name = document.getElementById('studentName').value.trim();
-          if (!name) {
-            showToast('Escribe el nombre del alumno');
-            return;
-          }
-          if (editingStudentId) {
-            const student = appData.students.find((item) => item.id === editingStudentId);
-            if (student) student.name = name;
-            showToast('Alumno actualizado');
-          } else {
-            appData.students.push({ id: createId(), name });
-            showToast('Alumno agregado');
-          }
-          editingStudentId = null;
           form.reset();
           saveData();
           render();
@@ -825,66 +740,15 @@
           draftListText = '';
           saveData();
           render();
-
-        }
-
-        if (form.id === 'bulkStudentForm') {
-          const raw = document.getElementById('bulkNames').value;
-          const names = splitNames(raw);
-          if (!names.length) {
-            showToast('Pega una lista o carga un archivo');
-            return;
-          }
-          names.forEach((name) => {
-            if (!appData.students.some((student) => student.name.toLowerCase() === name.toLowerCase())) {
-              appData.students.push({ id: createId(), name });
-            }
-          });
-          saveData();
-          document.getElementById('bulkStudentForm').reset();
-          render();
-          showToast(`${names.length} alumnos registrados`);
-        }
-
-        if (form.id === 'assignStudentsForm') {
-          const subjectId = document.getElementById('assignSubjectSelect').value;
-          const selected = Array.from(document.querySelectorAll('input[name="assignStudents"]:checked')).map((input) => input.value);
-          const subject = appData.subjects.find((item) => item.id === subjectId);
-          if (!subject) {
-            showToast('Selecciona una materia');
-            return;
-          }
-          subject.students = Array.from(new Set([...(subject.students || []), ...selected]));
-          saveData();
-          render();
-          showToast('Alumnos asignados');
-        }
-
-        if (form.id === 'activityQuickForm') {
-          const name = document.getElementById('quickActivityName').value.trim();
-          const weightInput = document.getElementById('quickActivityWeight').value.trim();
-          const color = document.getElementById('quickActivityColor')?.value || '#8b6cf6';
-          const date = document.getElementById('quickActivityDate')?.value || getTodayKey();
-          const subject = appData.subjects.find((item) => item.id === activeSubjectId);
-          if (!subject) return;
-          if (!name) {
-            showToast('Escribe un nombre de actividad');
-            return;
-          }
-          const weight = Number(weightInput) || 0;
-          if (!subject.activities) subject.activities = [];
-          const activity = { id: createId(), name, weight, color, date };
-          subject.activities.push(activity);
-          saveData();
-          document.getElementById('quickActivityName').value = '';
-          document.getElementById('quickActivityWeight').value = '';
-          render();
-          showToast('Actividad creada');
         }
 
         if (form.id === 'activityForm') {
           const name = document.getElementById('activityName').value.trim();
           const weightValue = Number(document.getElementById('activityWeight')?.value.trim());
+          const categorySelect = document.getElementById('activityCategory');
+          const categoryId = categorySelect ? categorySelect.value : defaultActivityCategories[0].id;
+          const categoryObj = defaultActivityCategories.find((c) => c.id === categoryId) || defaultActivityCategories[0];
+
           const subject = appData.subjects.find((item) => item.id === activeSubjectId);
           if (!subject) return;
           if (!name) {
@@ -897,29 +761,26 @@
             const activity = subject.activities.find((item) => item.id === editingActivityId);
             if (activity) {
               activity.name = name;
+              activity.color = categoryObj.color;
               activity.weight = Number.isFinite(weightValue) && weightValue > 0 ? weightValue : activity.weight;
             }
             editingActivityId = null;
             showToast('Actividad actualizada');
           } else {
-            const category = defaultActivityCategories[0];
             const activity = {
               id: createId(),
               name,
-              weight: Number.isFinite(weightValue) && weightValue > 0 ? weightValue : category.weight,
+              weight: Number.isFinite(weightValue) && weightValue > 0 ? weightValue : categoryObj.weight,
               date: getTodayKey(),
-              color: category.color
+              color: categoryObj.color
             };
             subject.activities.push(activity);
             showToast('Actividad creada');
           }
 
           saveData();
-          document.getElementById('activityName').value = '';
-          document.getElementById('activityWeight').value = '';
           render();
         }
-
 
         if (form.id === 'profileForm') {
           appData.profile = {
@@ -942,7 +803,6 @@
           button.classList.toggle('active', button.getAttribute('data-view') === currentView);
         });
 
-        // Show login screen unless user logged in during this session
         if (!isLoggedIn) {
           loginScreen.classList.remove('hidden');
           mainApp.classList.add('hidden');
@@ -977,35 +837,37 @@
         const editingSubject = editingSubjectId ? subjectList.find((item) => item.id === editingSubjectId) : null;
         const availableLists = [...(appData.studentLists || [])].sort((a, b) => a.name.localeCompare(b.name));
         const selectedLists = selectedSubject ? availableLists.filter((list) => (selectedSubject.studentListIds || []).includes(list.id)) : [];
-        // If a subject is selected, show only the management panel full width
+
         if (selectedSubject) {
           contentArea.innerHTML = `
             <section class="space-y-6">
               <div class="clay-card rounded-[30px] p-5 md:p-6">
-                <div class="mb-4 flex items-center justify-between gap-3">
-                  <div>
-                    <h3 class="text-xl font-semibold">${escapeHtml(selectedSubject.name)}</h3>
+                <div class="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                  <div class="flex items-center gap-3">
+                    <button class="clay-button rounded-2xl px-3 py-2 text-sm" data-action="back-to-subjects">← Volver</button>
+                    <div>
+                      <h3 class="text-2xl font-semibold">${escapeHtml(selectedSubject.name)}</h3>
+                      <p class="text-sm text-slate-500">${escapeHtml(selectedSubject.description || 'Sin descripción')}</p>
+                    </div>
                   </div>
-                  <button class="clay-button rounded-2xl px-4 py-2 font-semibold" data-action="back-to-subjects">← Volver a materias</button>
                 </div>
-                <div class="mb-4">
-                  <div class="mb-4 flex gap-2">
-                    <button class="clay-button rounded-2xl px-3 py-2 text-sm ${activeSubjectTab === 'asistencia' ? 'nav-pill active' : ''}" data-action="switch-subject-tab" data-tab="asistencia">Asistencia</button>
-                    <button class="clay-button rounded-2xl px-3 py-2 text-sm ${activeSubjectTab === 'actividades' ? 'nav-pill active' : ''}" data-action="switch-subject-tab" data-tab="actividades">Actividades</button>
-                  </div>
-                  ${selectedLists.length ? `<div class="mb-4 flex flex-wrap gap-2">
-                    ${selectedLists.map((list) => `<button type="button" class="clay-button rounded-full px-3 py-2 text-sm ${list.id === selectedSubject.activeListId ? 'border border-slate-300 bg-slate-100' : ''}" data-action="select-subject-list" data-id="${list.id}">${escapeHtml(list.name)}${list.id === selectedSubject.activeListId ? ' · Activa' : ''}</button>`).join('')}
-                  </div>` : '<p class="text-sm text-slate-500 mb-4">No hay listas vinculadas a esta materia.</p>'}
 
-                  ${activeSubjectTab === 'asistencia' ? renderAttendanceTab(selectedSubject) : renderActivitiesTab(selectedSubject)}
+                <div class="mb-4 flex gap-2">
+                  <button class="clay-button rounded-2xl px-3 py-2 text-sm ${activeSubjectTab === 'asistencia' ? 'nav-pill active' : ''}" data-action="switch-subject-tab" data-tab="asistencia">Asistencia</button>
+                  <button class="clay-button rounded-2xl px-3 py-2 text-sm ${activeSubjectTab === 'actividades' ? 'nav-pill active' : ''}" data-action="switch-subject-tab" data-tab="actividades">Actividades</button>
                 </div>
+
+                ${selectedLists.length ? `<div class="mb-4 flex flex-wrap gap-2">
+                  ${selectedLists.map((list) => `<button type="button" class="clay-button rounded-full px-3 py-2 text-sm ${list.id === selectedSubject.activeListId ? 'border border-slate-300 bg-slate-100' : ''}" data-action="select-subject-list" data-id="${list.id}">${escapeHtml(list.name)}${list.id === selectedSubject.activeListId ? ' · Activa' : ''}</button>`).join('')}
+                </div>` : '<p class="text-sm text-slate-500 mb-4">No hay listas vinculadas a esta materia.</p>'}
+
+                ${activeSubjectTab === 'asistencia' ? renderAttendanceTab(selectedSubject) : renderActivitiesTab(selectedSubject)}
               </div>
             </section>
           `;
           return;
         }
 
-        // No subject selected: show subjects grid (3 per row) and the subject creation form
         contentArea.innerHTML = `
           <section class="space-y-6">
             <div class="clay-card rounded-[30px] p-5 md:p-6">
@@ -1055,126 +917,119 @@
       }
 
       function renderAttendanceTab(subject) {
-  const students = getSubjectStudents(subject);
-  const today = getTodayKey();
+        const students = getSubjectStudents(subject);
+        const today = getTodayKey();
 
-  // Obtenemos el rango de fechas guardado o el rango por defecto de los últimos 30 días
-  const storedStartDate = subject.attendanceStartDate || addDays(today, -30);
-  const storedEndDate = subject.attendanceEndDate || today;
+        const storedStartDate = subject.attendanceStartDate || addDays(today, -30);
+        const storedEndDate = subject.attendanceEndDate || today;
 
-  // Obtenemos solo los días de lunes a viernes en el rango de fechas
-  const attendanceDates = getWeekdaysInRange(storedStartDate, storedEndDate);
+        const attendanceDates = getWeekdaysInRange(storedStartDate, storedEndDate);
 
-  if (!students.length) {
-    return `<p class="text-sm text-slate-500">Sin alumnos asignados a esta materia aún.</p>`;
-  }
+        if (!students.length) {
+          return `<p class="text-sm text-slate-500">No hay alumnos asignados a esta materia o lista.</p>`;
+        }
 
-  subject.attendanceByDate = subject.attendanceByDate || {};
+        subject.attendanceByDate = subject.attendanceByDate || {};
 
-  const monthNames = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
-  const dayNames = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+        const monthNames = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+        const dayNames = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
 
-  // Generamos los encabezados de los días en la tabla con el botón de "Asistencia General"
- const dayHeaders = attendanceDates.map((date) => {
-    const dateObj = new Date(date + 'T00:00:00');
-    const weekdayName = dayNames[dateObj.getDay()];
-    const monthName = monthNames[dateObj.getMonth()];
-    const isToday = date === today;
+        const dayHeaders = attendanceDates.map((date) => {
+          const dateObj = new Date(date + 'T00:00:00');
+          const weekdayName = dayNames[dateObj.getDay()];
+          const monthName = monthNames[dateObj.getMonth()];
+          const isToday = date === today;
 
-    // Verificamos si existe un respaldo guardado para esta fecha y materia
-    const hasBackup = attendanceBackups[`${subject.id}_${date}`] ? true : false;
+          const hasBackup = attendanceBackups[`${subject.id}_${date}`] ? true : false;
 
-    const buttonHtml = hasBackup 
-      ? `<button type="button" 
-                 class="mt-1 bg-slate-100 hover:bg-slate-200 text-slate-600 text-[10px] font-medium px-1.5 py-0.5 rounded-md border border-slate-300 transition-colors flex items-center gap-1"
-                 data-action="undo-bulk-attendance" 
-                 data-date="${date}" 
-                 title="Restaurar estados anteriores">
-           ↩️ Deshacer
-         </button>`
-      : `<button type="button" 
-                 class="mt-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 text-[10px] font-medium px-1.5 py-0.5 rounded-md border border-emerald-200/60 transition-colors flex items-center gap-1"
-                 data-action="bulk-attendance-present" 
-                 data-date="${date}" 
-                 title="Marcar asistencia general para este día">
-           👥 Todos 🟢
-         </button>`;
+          const buttonHtml = hasBackup 
+            ? `<button type="button" 
+                       class="mt-1 bg-slate-100 hover:bg-slate-200 text-slate-600 text-[10px] font-medium px-1.5 py-0.5 rounded-md border border-slate-300 transition-colors flex items-center gap-1"
+                       data-action="undo-bulk-attendance" 
+                       data-date="${date}" 
+                       title="Restaurar estados anteriores">
+                 ↩️ Deshacer
+               </button>`
+            : `<button type="button" 
+                       class="mt-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 text-[10px] font-medium px-1.5 py-0.5 rounded-md border border-emerald-200/60 transition-colors flex items-center gap-1"
+                       data-action="bulk-attendance-present" 
+                       data-date="${date}" 
+                       title="Marcar asistencia general para este día">
+                 👥 Todos 🟢
+               </button>`;
 
-    return `
-      <th class="px-2 py-2 text-center border border-slate-200" style="min-width:105px;" ${isToday ? 'data-current-day' : ''}>
-        <div class="flex flex-col items-center gap-0.5">
-          <span class="text-[9px] uppercase font-bold text-slate-400 tracking-wider">${monthName}</span>
-          <span class="text-xs uppercase text-slate-500">${weekdayName}</span>
-          <span class="font-semibold text-sm">${Number(date.split('-')[2])}</span>
-          ${buttonHtml}
-        </div>
-      </th>
-    `;
-  }).join('');
+          return `
+            <th class="px-2 py-2 text-center border border-slate-200" style="min-width:105px;" ${isToday ? 'data-current-day' : ''}>
+              <div class="flex flex-col items-center gap-0.5">
+                <span class="text-[9px] uppercase font-bold text-slate-400 tracking-wider">${monthName}</span>
+                <span class="text-xs uppercase text-slate-500">${weekdayName}</span>
+                <span class="font-semibold text-sm">${Number(date.split('-')[2])}</span>
+                ${buttonHtml}
+              </div>
+            </th>
+          `;
+        }).join('');
 
-  // Generamos las filas de cada alumno
-  const rows = students.map((student) => {
-    const cells = attendanceDates.map((date) => {
-      const state = (subject.attendanceByDate[date] || {})[student.id] || '';
-      const label = state === 'presente' ? '🟢' : state === 'falta' ? '🔴' : state === 'retardo' ? '🟡' : '◻️';
-      return `
-        <td class="px-1 py-1 text-center border border-slate-200" style="min-width:105px;">
-          <button class="clay-button rounded-md px-2 py-1" data-action="toggle-cell" data-date="${date}" data-student-id="${student.id}">${label}</button>
-        </td>
-      `;
-    }).join('');
+        const rows = students.map((student) => {
+          const cells = attendanceDates.map((date) => {
+            const state = (subject.attendanceByDate[date] || {})[student.id] || '';
+            const label = state === 'presente' ? '🟢' : state === 'falta' ? '🔴' : state === 'retardo' ? '🟡' : '◻️';
+            return `
+              <td class="px-1 py-1 text-center border border-slate-200" style="min-width:105px;">
+                <button class="clay-button rounded-md px-2 py-1" data-action="toggle-cell" data-date="${date}" data-student-id="${student.id}">${label}</button>
+              </td>
+            `;
+          }).join('');
 
-    // Cálculo matemático de los porcentajes de asistencia
-    const totalDiasPosibles = attendanceDates.length;
-    const diasAsistidos = attendanceDates.filter(date => (subject.attendanceByDate[date]?.[student.id] === 'presente')).length;
-    const attendancePercent = totalDiasPosibles > 0 ? Math.round((diasAsistidos / totalDiasPosibles) * 100) : 0;
+          const totalDiasPosibles = attendanceDates.length;
+          const diasAsistidos = attendanceDates.filter(date => (subject.attendanceByDate[date]?.[student.id] === 'presente')).length;
+          const attendancePercent = totalDiasPosibles > 0 ? Math.round((diasAsistidos / totalDiasPosibles) * 100) : 0;
 
-    return `
-      <tr>
-        <td class="px-2 py-2 font-medium border border-slate-200 sticky-col" style="width:160px; max-width:160px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; background: white;" title="${escapeHtml(student.name)}">
-          ${escapeHtml(student.name)}
-        </td>
-        ${cells}
-        <td class="px-2 py-2 text-center font-bold text-xs border border-slate-200 sticky-col-right pct-container" data-student-id="${student.id}" style="width:80px; max-width:80px; background: white;">
-          <div class="text-slate-400 font-normal text-[10px] mb-0.5">${diasAsistidos}/${totalDiasPosibles} d</div>
-          <div class="text-slate-700 text-sm">${attendancePercent}%</div>
-        </td>
-      </tr>
-    `;
-  }).join('');
+          return `
+            <tr>
+              <td class="px-2 py-2 font-medium border border-slate-200 sticky-col" style="width:160px; max-width:160px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; background: white;" title="${escapeHtml(student.name)}">
+                ${escapeHtml(student.name)}
+              </td>
+              ${cells}
+              <td class="px-2 py-2 text-center font-bold text-xs border border-slate-200 sticky-col-right pct-container" data-student-id="${student.id}" style="width:80px; max-width:80px; background: white;">
+                <div class="text-slate-400 font-normal text-[10px] mb-0.5">${diasAsistidos}/${totalDiasPosibles} d</div>
+                <div class="text-slate-700 text-sm">${attendancePercent}%</div>
+              </td>
+            </tr>
+          `;
+        }).join('');
 
-  // El diseño del contenedor de la tabla de asistencia con sus controles de fecha
-  return `
-    <div class="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between no-print">
-      <div class="flex flex-wrap items-center gap-2">
-        <label class="text-sm font-medium text-slate-600">Desde:
-          <input type="date" class="input-clay rounded-xl px-3 py-1.5 text-sm" data-action="set-attendance-dates" data-field="startDate" value="${storedStartDate}" />
-        </label>
-        <label class="text-sm font-medium text-slate-600">Hasta:
-          <input type="date" class="input-clay rounded-xl px-3 py-1.5 text-sm" data-action="set-attendance-dates" data-field="endDate" value="${storedEndDate}" />
-        </label>
-      </div>
-      <div class="flex items-center gap-2">
-        <span class="text-xs text-slate-500">Simbología: 🟢 Presente | 🔴 Falta | 🟡 Retardo | ◻️ Vacío</span>
-      </div>
-    </div>
+        return `
+          <div class="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between no-print">
+            <div class="flex flex-wrap items-center gap-2">
+              <label class="text-sm font-medium text-slate-600">Desde:
+                <input type="date" class="input-clay rounded-xl px-3 py-1.5 text-sm" data-action="set-attendance-dates" data-field="startDate" value="${storedStartDate}" />
+              </label>
+              <label class="text-sm font-medium text-slate-600">Hasta:
+                <input type="date" class="input-clay rounded-xl px-3 py-1.5 text-sm" data-action="set-attendance-dates" data-field="endDate" value="${storedEndDate}" />
+              </label>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="text-xs text-slate-500">Simbología: 🟢 Presente | 🔴 Falta | 🟡 Retardo | ◻️ Vacío</span>
+            </div>
+          </div>
 
-    <div class="attendance-scroll rounded-2xl border border-slate-200 max-w-full">
-      <table class="w-full border-collapse text-left text-xs text-slate-600">
-        <thead class="bg-slate-50 uppercase text-[10px] font-semibold text-slate-500">
-          <tr>
-            <th class="px-2 py-3 border border-slate-200 sticky-col" style="width:160px; min-width:160px; background: #f8fafc;">Alumno</th>
-            ${dayHeaders}
-            <th class="px-2 py-3 text-center border border-slate-200 sticky-col-right" style="width:80px; min-width:80px; background: #f8fafc;">% Asist.</th>
-          </tr>
-        </thead>
-        <tbody class="divide-y divide-slate-200">
-          ${rows}
-        </tbody>
-      </table>
-    </div>
-  `;
-}
+          <div class="attendance-scroll rounded-2xl border border-slate-200 max-w-full">
+            <table class="w-full border-collapse text-left text-xs text-slate-600">
+              <thead class="bg-slate-50 uppercase text-[10px] font-semibold text-slate-500">
+                <tr>
+                  <th class="px-2 py-3 border border-slate-200 sticky-col" style="width:160px; min-width:160px; background: #f8fafc;">Alumno</th>
+                  ${dayHeaders}
+                  <th class="px-2 py-3 text-center border border-slate-200 sticky-col-right" style="width:80px; min-width:80px; background: #f8fafc;">% Asist.</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-200">
+                ${rows}
+              </tbody>
+            </table>
+          </div>
+        `;
+      }
 
       function renderEvaluationTab(subject) {
         const assignedStudents = getSubjectStudents(subject);
@@ -1260,7 +1115,6 @@
 
       function renderAlumnosView() {
         const subjects = appData.subjects || [];
-        const editingList = editingStudentListId ? appData.studentLists.find((item) => item.id === editingStudentListId) : null;
         const studentLists = [...(appData.studentLists || [])].sort((a, b) => a.name.localeCompare(b.name));
 
         contentArea.innerHTML = `
@@ -1280,7 +1134,7 @@
                   <div class="flex gap-2">
                     <label class="clay-button cursor-pointer rounded-2xl px-4 py-3 font-semibold">
                       Agregar desde archivo
-                      <input type="file" accept=".txt,.csv" class="hidden" data-list-file="true" />
+                      <input type="file" accept=".txt,.csv,.pdf" class="hidden" data-list-file="true" />
                     </label>
                     <button type="submit" class="clay-button rounded-2xl px-4 py-3 font-semibold">Guardar lista</button>
                   </div>
@@ -1371,29 +1225,6 @@
         subject.students = mergedIds;
       }
 
-      function syncListSubjects(list, selectedSubjectIds) {
-        list.subjectIds = selectedSubjectIds || [];
-        appData.subjects.forEach((subject) => {
-          const hasList = (subject.studentListIds || []).includes(list.id);
-          const shouldHaveList = list.subjectIds.includes(subject.id);
-          if (shouldHaveList && !hasList) {
-            subject.studentListIds = [...new Set([...(subject.studentListIds || []), list.id])];
-          }
-          if (!shouldHaveList && hasList) {
-            subject.studentListIds = (subject.studentListIds || []).filter((id) => id !== list.id);
-          }
-        });
-      }
-
-      function readTextFromFile(file) {
-        return new Promise((resolve) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(reader.result || '');
-          reader.onerror = () => resolve('');
-          reader.readAsText(file);
-        });
-      }
-
       function getSubjectStudents(subject) {
         if (subject.activeListId) {
           const list = appData.studentLists.find((item) => item.id === subject.activeListId);
@@ -1439,78 +1270,436 @@
         `;
       }
 
+      /* REESTRUCTURACIÓN COMPLETA DE VISTA DE REPORTES */
       function renderReportesView() {
-        const subjects = appData.subjects || [];
-        const reportRows = buildRiskReportRows();
-
         contentArea.innerHTML = `
           <section class="space-y-6">
-            <div class="clay-card rounded-[30px] p-5 md:p-6">
-              <div class="mb-4 flex items-center justify-between gap-3">
+            <div class="clay-card no-print rounded-[30px] p-5 md:p-6">
+              <div class="mb-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
-                  <p class="text-sm font-semibold uppercase tracking-[0.24em] text-slate-500">Reportes</p>
-                  <h3 class="text-xl font-semibold">Exporta y revisa el estado del grupo</h3>
+                  <p class="text-sm font-semibold uppercase tracking-[0.24em] text-slate-500">Centro de Analítica</p>
+                  <h3 class="text-xl font-semibold">Reportes Estadísticos y Rendimiento</h3>
                 </div>
-                <button class="clay-button rounded-2xl px-4 py-3 font-semibold" data-action="export-csv">Exportar sábanas a CSV</button>
+                <div class="flex flex-wrap gap-2">
+                  <button class="clay-button rounded-2xl px-4 py-2 text-sm font-semibold" data-action="export-csv">📂 Excel / CSV</button>
+                  <button class="clay-button rounded-2xl px-4 py-2 text-sm font-semibold" data-action="print-risk-report">🖨️ PDF / Imprimir</button>
+                </div>
               </div>
-              <p class="text-sm text-slate-500">El CSV se descarga automáticamente compatible con Excel.</p>
+
+              <div class="flex flex-wrap gap-2 border-t border-slate-200/60 pt-4">
+                <button class="clay-button rounded-2xl px-4 py-2 text-sm ${activeReportTab === 'lista' ? 'nav-pill active' : ''}" data-action="switch-report-tab" data-tab="lista">📋 Por Lista (Grupo)</button>
+                <button class="clay-button rounded-2xl px-4 py-2 text-sm ${activeReportTab === 'alumno' ? 'nav-pill active' : ''}" data-action="switch-report-tab" data-tab="alumno">👤 Por Alumno</button>
+                <button class="clay-button rounded-2xl px-4 py-2 text-sm ${activeReportTab === 'riesgo' ? 'nav-pill active' : ''}" data-action="switch-report-tab" data-tab="riesgo">🚦 Semáforo de Riesgo</button>
+              </div>
             </div>
 
-            <div class="clay-card rounded-[30px] p-5 md:p-6">
-              <div class="mb-4 flex items-center justify-between gap-3">
-                <div>
-                  <h3 class="text-xl font-semibold">Semáforo de riesgo</h3>
-                  <p class="text-sm text-slate-500">Alumnos con promedio reprobatorio o más del 20% de faltas.</p>
-                </div>
-                <button class="clay-button rounded-2xl px-4 py-3 font-semibold" data-action="print-risk-report">Imprimir/PDF</button>
-              </div>
-              <div class="space-y-3">
-                ${reportRows.length ? reportRows.map((row) => `
-                  <div class="print-card rounded-[24px] bg-white/70 p-4">
-                    <div class="flex flex-wrap items-center justify-between gap-2">
-                      <div>
-                        <p class="font-semibold">${escapeHtml(row.studentName)}</p>
-                        <p class="text-sm text-slate-500">${escapeHtml(row.subjectName)}</p>
-                      </div>
-                      <div class="flex flex-wrap gap-2 text-sm">
-                        <span class="chip rounded-full px-3 py-2">Promedio: ${row.average}</span>
-                        <span class="chip rounded-full px-3 py-2">Faltas: ${row.absencePercent}%</span>
-                        <span class="chip rounded-full px-3 py-2">Estado: ${row.status}</span>
-                      </div>
-                    </div>
-                  </div>
-                `).join('') : '<p class="text-sm text-slate-500">Aún no hay alumnos en riesgo para mostrar.</p>'}
-              </div>
+            <div id="reportSubcontent">
+              ${renderReportSubcontent()}
             </div>
           </section>
         `;
+
+        setTimeout(() => {
+          initReportChart();
+        }, 50);
       }
 
-      function buildRiskReportRows() {
-        const rows = [];
-        appData.subjects.forEach((subject) => {
-          (subject.students || []).forEach((studentId) => {
-            const student = appData.students.find((item) => item.id === studentId);
-            if (!student) return;
-            const evaluations = subject.evaluations?.[studentId] || {};
-            const values = Object.values(evaluations).filter((value) => value !== '').map(Number);
-            const average = values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : 0;
-            const attendanceEntries = Object.values(subject.attendanceByDate || {}).flatMap((day) => Object.entries(day));
-            const studentAttendanceEntries = attendanceEntries.filter(([id]) => id === studentId);
-            const absenceCount = studentAttendanceEntries.filter(([, state]) => state === 'falta').length;
-            const absencePercent = studentAttendanceEntries.length ? (absenceCount / studentAttendanceEntries.length) * 100 : 0;
-            if (average < 70 || absencePercent > 20) {
-              rows.push({
-                subjectName: subject.name,
-                studentName: student.name,
-                average: average.toFixed(1),
-                absencePercent: absencePercent.toFixed(1),
-                status: average < 70 ? 'Reprobatorio' : 'Alerta de faltas'
-              });
-            }
+      function renderReportSubcontent() {
+        if (activeReportTab === 'lista') return renderReportListaView();
+        if (activeReportTab === 'alumno') return renderReportAlumnoView();
+        if (activeReportTab === 'riesgo') return renderReportRiesgoView();
+        return renderReportListaView();
+      }
+
+      /* VISTA 1: POR LISTA */
+      function renderReportListaView() {
+        const studentLists = appData.studentLists || [];
+        if (!selectedReportListId && studentLists.length) {
+          selectedReportListId = studentLists[0].id;
+        }
+
+        const currentList = studentLists.find(l => l.id === selectedReportListId);
+        const listStudents = currentList ? (currentList.studentIds || []).map(id => appData.students.find(s => s.id === id)).filter(Boolean) : [];
+
+        // Calcular Asistencia General de la Lista (todas las materias vinculadas o generales)
+        let totalAsistenciasPosibles = 0;
+        let totalAsistenciasPresentes = 0;
+
+        appData.subjects.forEach(subject => {
+          const attendanceEntries = Object.values(subject.attendanceByDate || {}).flatMap(d => Object.entries(d));
+          listStudents.forEach(st => {
+            const stAtt = attendanceEntries.filter(([id]) => id === st.id);
+            totalAsistenciasPosibles += stAtt.length;
+            totalAsistenciasPresentes += stAtt.filter(([, state]) => state === 'presente').length;
           });
         });
-        return rows.sort((a, b) => a.studentName.localeCompare(b.studentName));
+
+        const asistenciaGralLista = totalAsistenciasPosibles > 0 
+          ? Math.round((totalAsistenciasPresentes / totalAsistenciasPosibles) * 100) 
+          : 100;
+
+        // Calcular Promedio por Materia para esta Lista
+        const materiaMetrics = appData.subjects.map(subject => {
+          let califSum = 0;
+          let califCount = 0;
+          let attPosibles = 0;
+          let attPresentes = 0;
+
+          const attendanceEntries = Object.values(subject.attendanceByDate || {}).flatMap(d => Object.entries(d));
+
+          listStudents.forEach(st => {
+            // Promedio calificación
+            const ev = subject.evaluations?.[st.id] || {};
+            const vals = Object.values(ev).filter(v => v !== '').map(Number);
+            if (vals.length) {
+              califSum += (vals.reduce((a,b)=>a+b, 0) / vals.length);
+              califCount++;
+            }
+            // Asistencia por materia
+            const stAtt = attendanceEntries.filter(([id]) => id === st.id);
+            attPosibles += stAtt.length;
+            attPresentes += stAtt.filter(([, state]) => state === 'presente').length;
+          });
+
+          return {
+            name: subject.name,
+            promedioCalif: califCount ? (califSum / califCount).toFixed(1) : '—',
+            promedioAsist: attPosibles ? Math.round((attPresentes / attPosibles) * 100) + '%' : '100%'
+          };
+        });
+
+        return `
+          <div class="space-y-6">
+            <div class="clay-card no-print rounded-[30px] p-5">
+              <label class="block text-sm font-semibold mb-2">Seleccionar Lista de Alumnos:</label>
+              <select id="reportListSelect" class="input-clay w-full rounded-2xl px-4 py-3 outline-none">
+                ${studentLists.map(l => `<option value="${l.id}" ${l.id === selectedReportListId ? 'selected' : ''}>${escapeHtml(l.name)} (${(l.studentIds||[]).length} alumnos)</option>`).join('')}
+              </select>
+            </div>
+
+            ${currentList ? `
+              <div class="grid gap-4 md:grid-cols-2">
+                <div class="clay-card rounded-[24px] p-4 text-center">
+                  <p class="text-xs uppercase text-slate-500 font-semibold">Alumnos en Lista</p>
+                  <p class="text-3xl font-bold mt-1 text-slate-700">${listStudents.length}</p>
+                </div>
+                <div class="clay-card rounded-[24px] p-4 text-center">
+                  <p class="text-xs uppercase text-slate-500 font-semibold">Asistencia General del Grupo</p>
+                  <p class="text-3xl font-bold mt-1 text-violet-600">${asistenciaGralLista}%</p>
+                </div>
+              </div>
+
+              <div class="grid gap-6 md:grid-cols-2">
+                <div class="clay-card print-card rounded-[30px] p-5 md:p-6">
+                  <h4 class="text-lg font-semibold mb-4">Rendimiento por Materia (Lista: ${escapeHtml(currentList.name)})</h4>
+                  <div class="overflow-x-auto">
+                    <table class="w-full text-sm text-left">
+                      <thead class="bg-slate-100 text-xs uppercase text-slate-500">
+                        <tr>
+                          <th class="py-2 px-3">Materia</th>
+                          <th class="py-2 px-3 text-center">Promedio Calificación</th>
+                          <th class="py-2 px-3 text-center">Asistencia Promedio</th>
+                        </tr>
+                      </thead>
+                      <tbody class="divide-y divide-slate-100">
+                        ${materiaMetrics.map(m => `
+                          <tr>
+                            <td class="py-3 px-3 font-medium">${escapeHtml(m.name)}</td>
+                            <td class="py-3 px-3 text-center font-bold text-violet-600">${m.promedioCalif}</td>
+                            <td class="py-3 px-3 text-center">${m.promedioAsist}</td>
+                          </tr>
+                        `).join('')}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                <div class="clay-card print-card rounded-[30px] p-5 md:p-6">
+                  <h4 class="text-lg font-semibold mb-4">Comparativo de Promedios</h4>
+                  <div class="w-full max-h-[300px] flex justify-center">
+                    <canvas id="reportChartCanvas"></canvas>
+                  </div>
+                </div>
+              </div>
+            ` : '<p class="text-slate-500">No hay listas creadas aún.</p>'}
+          </div>
+        `;
+      }
+
+      /* VISTA 2: POR ALUMNO */
+      function renderReportAlumnoView() {
+        const studentLists = appData.studentLists || [];
+        if (!selectedReportListId && studentLists.length) {
+          selectedReportListId = studentLists[0].id;
+        }
+
+        const currentList = studentLists.find(l => l.id === selectedReportListId);
+        const listStudents = currentList ? (currentList.studentIds || []).map(id => appData.students.find(s => s.id === id)).filter(Boolean) : [];
+
+        if (!selectedReportStudentId && listStudents.length) {
+          selectedReportStudentId = listStudents[0].id;
+        }
+
+        const currentStudent = listStudents.find(s => s.id === selectedReportStudentId);
+
+        let studentRowsHtml = '';
+        if (currentStudent) {
+          appData.subjects.forEach(subject => {
+            const ev = subject.evaluations?.[currentStudent.id] || {};
+            const vals = Object.values(ev).filter(v => v !== '').map(Number);
+            const avg = vals.length ? (vals.reduce((a,b)=>a+b, 0) / vals.length).toFixed(1) : '—';
+            
+            const attendanceEntries = Object.values(subject.attendanceByDate || {}).flatMap(d => Object.entries(d));
+            const studentAtt = attendanceEntries.filter(([id]) => id === currentStudent.id);
+            const presences = studentAtt.filter(([, s]) => s === 'presente').length;
+            const pct = studentAtt.length ? Math.round((presences / studentAtt.length) * 100) : 100;
+
+            studentRowsHtml += `
+              <tr class="border-b border-slate-200/60">
+                <td class="py-3 px-3 font-medium">${escapeHtml(subject.name)}</td>
+                <td class="py-3 px-3 text-center font-bold text-violet-600">${avg}</td>
+                <td class="py-3 px-3 text-center">${pct}%</td>
+              </tr>
+            `;
+          });
+        }
+
+        return `
+          <div class="space-y-6">
+            <div class="clay-card no-print rounded-[30px] p-5 grid gap-4 md:grid-cols-2">
+              <div>
+                <label class="block text-sm font-semibold mb-2">1. Selecciona Lista:</label>
+                <select id="reportListSelect" class="input-clay w-full rounded-2xl px-4 py-3 outline-none">
+                  ${studentLists.map(l => `<option value="${l.id}" ${l.id === selectedReportListId ? 'selected' : ''}>${escapeHtml(l.name)}</option>`).join('')}
+                </select>
+              </div>
+
+              <div>
+                <label class="block text-sm font-semibold mb-2">2. Selecciona Alumno:</label>
+                <select id="reportStudentSelect" class="input-clay w-full rounded-2xl px-4 py-3 outline-none" ${!listStudents.length ? 'disabled' : ''}>
+                  ${listStudents.length 
+                    ? listStudents.map(s => `<option value="${s.id}" ${s.id === selectedReportStudentId ? 'selected' : ''}>${escapeHtml(s.name)}</option>`).join('')
+                    : '<option value="">-- Sin alumnos en la lista --</option>'
+                  }
+                </select>
+              </div>
+            </div>
+
+            ${currentStudent ? `
+              <div class="grid gap-6 md:grid-cols-2">
+                <div class="clay-card print-card rounded-[30px] p-5 md:p-6">
+                  <h4 class="text-lg font-semibold mb-2">Desempeño Individual: ${escapeHtml(currentStudent.name)}</h4>
+                  <p class="text-xs text-slate-500 mb-4">Lista: ${escapeHtml(currentList?.name || '')}</p>
+                  <div class="overflow-x-auto">
+                    <table class="w-full text-sm text-left">
+                      <thead class="bg-slate-100 text-xs uppercase text-slate-500">
+                        <tr>
+                          <th class="py-2 px-3">Materia</th>
+                          <th class="py-2 px-3 text-center">Calificación</th>
+                          <th class="py-2 px-3 text-center">Asistencia</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        ${studentRowsHtml || '<tr><td colspan="3" class="p-3 text-slate-400">Sin materias registradas</td></tr>'}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                <div class="clay-card print-card rounded-[30px] p-5 md:p-6">
+                  <h4 class="text-lg font-semibold mb-4">Gráfica de Calificaciones por Materia</h4>
+                  <div class="w-full max-h-[300px] flex justify-center">
+                    <canvas id="reportChartCanvas"></canvas>
+                  </div>
+                </div>
+              </div>
+            ` : '<p class="text-slate-500">Selecciona un alumno para ver el detalle.</p>'}
+          </div>
+        `;
+      }
+
+      /* VISTA 3: SEMÁFORO DE RIESGO REDISEÑADO */
+      function renderReportRiesgoView() {
+        const reportRows = buildRiskReportRowsRedesigned();
+        return `
+          <div class="clay-card print-card rounded-[30px] p-5 md:p-6 space-y-4">
+            <div>
+              <h3 class="text-xl font-semibold">Semáforo de Riesgo Académico</h3>
+              <p class="text-sm text-slate-500">Evaluación automática basada en promedio general y asistencia por materia.</p>
+            </div>
+
+            <!-- Leyenda intuitiva -->
+            <div class="grid gap-2 md:grid-cols-3 text-xs p-3 bg-slate-50 rounded-2xl border border-slate-200/60">
+              <div class="flex items-center gap-2">
+                <span class="text-base">🔴</span> 
+                <div><strong>Riesgo Alto:</strong> Calificación < 6.0 o Asistencia < 80%</div>
+              </div>
+              <div class="flex items-center gap-2">
+                <span class="text-base">🟡</span> 
+                <div><strong>Advertencia:</strong> Calificación 6.0 - 7.5 o Asistencia 80% - 84%</div>
+              </div>
+              <div class="flex items-center gap-2">
+                <span class="text-base">🟢</span> 
+                <div><strong>Estado Óptimo:</strong> Calificación >= 7.6 y Asistencia >= 85%</div>
+              </div>
+            </div>
+
+            <div class="space-y-3 mt-4">
+              ${reportRows.length ? reportRows.map((row) => `
+                <div class="print-card rounded-[24px] bg-white/80 p-4 border-l-4 ${row.borderColor}">
+                  <div class="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <p class="font-semibold text-slate-800">${escapeHtml(row.studentName)}</p>
+                      <p class="text-sm text-slate-500">${escapeHtml(row.subjectName)}</p>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-2 text-sm">
+                      <span class="chip rounded-full px-3 py-1 text-xs">Nota: <strong>${row.average}</strong></span>
+                      <span class="chip rounded-full px-3 py-1 text-xs">Asist: <strong>${row.attendancePercent}%</strong></span>
+                      <span class="chip rounded-full px-3 py-1 font-semibold ${row.statusBg}">
+                        ${row.icon} ${row.statusText}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              `).join('') : '<p class="text-sm text-slate-500">No hay registros de alumnos disponibles.</p>'}
+            </div>
+          </div>
+        `;
+      }
+
+      function buildRiskReportRowsRedesigned() {
+        const rows = [];
+        appData.subjects.forEach((subject) => {
+          const students = getSubjectStudents(subject);
+          students.forEach((student) => {
+            const studentId = student.id;
+            const evaluations = subject.evaluations?.[studentId] || {};
+            const values = Object.values(evaluations).filter((value) => value !== '').map(Number);
+            const average = values.length ? (values.reduce((sum, value) => sum + value, 0) / values.length) : 0;
+            
+            const attendanceEntries = Object.values(subject.attendanceByDate || {}).flatMap((day) => Object.entries(day));
+            const studentAttendanceEntries = attendanceEntries.filter(([id]) => id === studentId);
+            const presences = studentAttendanceEntries.filter(([, state]) => state === 'presente').length;
+            const attendancePercent = studentAttendanceEntries.length ? Math.round((presences / studentAttendanceEntries.length) * 100) : 100;
+
+            let icon = '🟢';
+            let statusText = 'Estado Óptimo';
+            let statusBg = 'bg-emerald-100 text-emerald-800';
+            let borderColor = 'border-emerald-400';
+
+            if (attendancePercent < 80 || (values.length && average < 6.0)) {
+              icon = '🔴';
+              statusText = 'Riesgo Alto: ';
+              if (values.length && average < 6.0 && attendancePercent < 80) statusText += 'Nota y Asistencia';
+              else if (values.length && average < 6.0) statusText += 'Nota Baja';
+              else statusText += 'Baja Asistencia';
+              statusBg = 'bg-rose-100 text-rose-800';
+              borderColor = 'border-rose-500';
+            } else if ((attendancePercent >= 80 && attendancePercent <= 84) || (values.length && average >= 6.0 && average <= 7.5)) {
+              icon = '🟡';
+              statusText = 'Advertencia: ';
+              if (attendancePercent >= 80 && attendancePercent <= 84) statusText += 'Asistencia Límite';
+              else statusText += 'Nota Regular';
+              statusBg = 'bg-amber-100 text-amber-800';
+              borderColor = 'border-amber-400';
+            }
+
+            rows.push({
+              subjectName: subject.name,
+              studentName: student.name,
+              average: values.length ? average.toFixed(1) : '—',
+              attendancePercent: attendancePercent,
+              icon,
+              statusText,
+              statusBg,
+              borderColor
+            });
+          });
+        });
+
+        // Ordenar colocando primero los de riesgo alto, luego advertencia y al final óptimo
+        return rows.sort((a, b) => {
+          const priority = { '🔴': 1, '🟡': 2, '🟢': 3 };
+          return (priority[a.icon] || 4) - (priority[b.icon] || 4);
+        });
+      }
+
+      function initReportChart() {
+        const canvas = document.getElementById('reportChartCanvas');
+        if (!canvas) return;
+
+        if (activeChartInstance) {
+          activeChartInstance.destroy();
+        }
+
+        const ctx = canvas.getContext('2d');
+
+        if (activeReportTab === 'lista') {
+          const studentLists = appData.studentLists || [];
+          const currentList = studentLists.find(l => l.id === selectedReportListId);
+          if (!currentList) return;
+
+          const listStudents = (currentList.studentIds || []).map(id => appData.students.find(s => s.id === id)).filter(Boolean);
+
+          const labels = appData.subjects.map(s => s.name);
+          const data = appData.subjects.map(subject => {
+            let sum = 0, count = 0;
+            listStudents.forEach(st => {
+              const ev = subject.evaluations?.[st.id] || {};
+              const vals = Object.values(ev).filter(v => v !== '').map(Number);
+              if (vals.length) {
+                sum += vals.reduce((a,b)=>a+b, 0) / vals.length;
+                count++;
+              }
+            });
+            return count ? (sum / count).toFixed(1) : 0;
+          });
+
+          activeChartInstance = new Chart(ctx, {
+            type: 'bar',
+            data: {
+              labels: labels,
+              datasets: [{
+                label: 'Promedio de la Lista (' + currentList.name + ')',
+                data: data,
+                backgroundColor: 'rgba(139, 108, 246, 0.65)',
+                borderColor: 'rgba(139, 108, 246, 1)',
+                borderWidth: 1.5,
+                borderRadius: 8
+              }]
+            },
+            options: { responsive: true, scales: { y: { min: 0, max: 10 } } }
+          });
+        }
+
+        if (activeReportTab === 'alumno') {
+          const student = appData.students.find(s => s.id === selectedReportStudentId);
+          if (!student) return;
+
+          const labels = appData.subjects.map(s => s.name);
+          const data = appData.subjects.map(subject => {
+            const ev = subject.evaluations?.[student.id] || {};
+            const vals = Object.values(ev).filter(v => v !== '').map(Number);
+            return vals.length ? (vals.reduce((a,b)=>a+b, 0) / vals.length).toFixed(1) : 0;
+          });
+
+          activeChartInstance = new Chart(ctx, {
+            type: 'line',
+            data: {
+              labels: labels,
+              datasets: [{
+                label: 'Calificaciones de ' + student.name,
+                data: data,
+                backgroundColor: 'rgba(255, 155, 138, 0.3)',
+                borderColor: 'rgba(255, 155, 138, 1)',
+                borderWidth: 2,
+                fill: true,
+                tension: 0.3
+              }]
+            },
+            options: { responsive: true, scales: { y: { min: 0, max: 10 } } }
+          });
+        }
       }
 
       function exportNotesCsv() {
@@ -1522,10 +1711,7 @@
         rows.push(['Ciclo', profile.ciclo || '']);
         rows.push([]);
         subjects.forEach((subject) => {
-          const students = [...(subject.students || [])]
-            .map((studentId) => appData.students.find((student) => student.id === studentId))
-            .filter(Boolean)
-            .sort((a, b) => a.name.localeCompare(b.name));
+          const students = getSubjectStudents(subject).sort((a, b) => a.name.localeCompare(b.name));
           const activities = (subject.activities || []).filter(Boolean);
           rows.push([subject.name]);
           rows.push(['Alumno', ...activities.map((activity) => activity.name), 'Promedio']);
@@ -1550,11 +1736,53 @@
       }
 
       function splitNames(raw) {
-        return raw
-          .split(/\n|,|;|\t/)
-          .map((item) => item.trim())
-          .filter(Boolean)
-          .filter((name, index, arr) => name && arr.indexOf(name) === index);
+        if (!raw) return [];
+        const headerKeywords = [
+          'no', 'num', 'numero', 'n°', 'nº', '#',
+          'nombre', 'nombres', 'apellido', 'paterno', 'materno', 
+          'apellidos', 'edad', 'grupo', 'grado', 'seccion', 'matricula', 
+          'id', 'email', 'correo', 'estudiante', 'alumno'
+        ];
+
+        const lines = raw.split(/\r?\n/);
+        const cleanNames = [];
+
+        lines.forEach((line) => {
+          let trimmed = line.trim();
+          if (!trimmed) return;
+          if (/^[,;\t\s\.\-]+$/.test(trimmed)) return;
+
+          const words = trimmed.toLowerCase().split(/[,;\t\s]+/);
+          const headerMatchCount = words.filter(w => headerKeywords.includes(w)).length;
+          if (headerMatchCount >= 2 || (words.length <= 3 && headerMatchCount >= 1)) {
+            return; 
+          }
+
+          trimmed = trimmed.replace(/^(\d+)[\s\.\,\-\)]+/, '').trim();
+
+          const columns = trimmed
+            .split(/[,;\t]+/)
+            .map(col => col.replace(/^["']|["']$/g, '').trim())
+            .filter(col => {
+              if (!col) return false;
+              const lowerCol = col.toLowerCase();
+              if (headerKeywords.includes(lowerCol)) return false;
+              if (/^\d+$/.test(col)) return false;
+              if (/^(grupo|grado)?\s*([a-z]|\d+[a-z]?|\d+[\-°][a-z])$/i.test(col)) return false;
+              return true;
+            });
+
+          if (columns.length > 0) {
+            let fullName = columns.join(' ').trim();
+            fullName = fullName.replace(/\s+(grupo|grado)?\s*([a-z]|\d+[a-z]?)$/i, '').trim();
+
+            if (fullName && !cleanNames.includes(fullName)) {
+              cleanNames.push(fullName);
+            }
+          }
+        });
+
+        return cleanNames;
       }
 
       function showApp() {
@@ -1578,10 +1806,6 @@
 
       function saveData() {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(appData));
-      }
-
-      function isValidCredentials(username, password) {
-        return Boolean(username && password);
       }
 
       function loadData() {
@@ -1633,38 +1857,12 @@
         return date.toISOString().slice(0, 10);
       }
 
-      function getDateRange(start, end) {
-        const dates = [];
-        let current = new Date(start);
-        const limit = new Date(end);
-        while (current <= limit) {
-          dates.push(current.toISOString().slice(0, 10));
-          current.setDate(current.getDate() + 1);
-        }
-        return dates;
-      }
-
-      function getCurrentWeekDates(referenceDate) {
-        const date = new Date(referenceDate);
-        const dayOfWeek = date.getDay();
-        const monday = new Date(date);
-        monday.setDate(date.getDate() - ((dayOfWeek + 6) % 7));
-        const dates = [];
-        for (let i = 0; i < 7; i += 1) {
-          const current = new Date(monday);
-          current.setDate(monday.getDate() + i);
-          dates.push(current.toISOString().slice(0, 10));
-        }
-        return dates;
-      }
-
       function getWeekdaysInRange(startDate, endDate) {
         const dates = [];
         let current = new Date(startDate);
         const limit = new Date(endDate);
         while (current <= limit) {
           const dayOfWeek = current.getDay();
-          // 1 = Monday, 5 = Friday (1-5 are weekdays)
           if (dayOfWeek !== 0 && dayOfWeek !== 6) {
             dates.push(current.toISOString().slice(0, 10));
           }
@@ -1672,7 +1870,7 @@
         }
         return dates;
       }
-    // Función auxiliar para actualizar los porcentajes en tiempo real con el formato estético correcto
+
       function updateUiPercentagesInRealTime(subject, students) {
         const startInput = contentArea.querySelector('input[data-field="startDate"]');
         const endInput = contentArea.querySelector('input[data-field="endDate"]');
@@ -1702,6 +1900,7 @@
           }
         }
       }
+
       function scrollAttendanceToToday() {
         const current = contentArea.querySelector('[data-current-day]');
         if (current) {
@@ -1722,6 +1921,46 @@
           saveData();
         }
       });
+
+      async function processUploadedFile(file) {
+        const fileName = file.name.toLowerCase();
+        let extractedText = '';
+
+        showToast('Procesando archivo...');
+
+        if (fileName.endsWith('.pdf')) {
+          try {
+            const arrayBuffer = await file.arrayBuffer();
+            const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+            let fullPdfText = '';
+            for (let i = 1; i <= pdf.numPages; i++) {
+              const page = await pdf.getPage(i);
+              const textContent = await page.getTextContent();
+              const pageText = textContent.items.map(item => item.str).join(' ');
+              fullPdfText += pageText + '\n';
+            }
+            extractedText = fullPdfText;
+          } catch (err) {
+            console.error('Error al leer el PDF:', err);
+            showToast('Error al leer el contenido del PDF');
+            return;
+          }
+        } else {
+          extractedText = await file.text();
+        }
+
+        const finalNames = splitNames(extractedText);
+
+        if (finalNames.length === 0) {
+          showToast('No se encontraron nombres válidos');
+          return;
+        }
+
+        draftListEntries = finalNames;
+        draftListText = finalNames.join('\n');
+        render();
+        showToast(`¡Se cargaron ${finalNames.length} alumnos correctamente!`);
+      }
     </script>
   </body>
 </html>
